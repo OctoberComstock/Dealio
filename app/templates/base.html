@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dealio</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body {
+            font-family: system-ui, sans-serif;
+            background: #f9f9f9;
+            color: #111;
+            margin: 0;
+            padding: 2rem 1rem;
+        }
+
+        main {
+            max-width: 560px;
+            margin: 4rem auto;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin: 0 0 0.25rem;
+        }
+
+        .tagline {
+            color: #555;
+            margin: 0 0 2rem;
+        }
+
+        .url-form {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 0.6rem 0.75rem;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        .url-input:focus {
+            outline: 2px solid #2563eb;
+            border-color: transparent;
+        }
+
+        .submit-button {
+            padding: 0.6rem 1.2rem;
+            font-size: 1rem;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .submit-button:hover {
+            background: #1d4ed8;
+        }
+
+        .error-message {
+            color: #b91c1c;
+            margin: 0.75rem 0 0;
+            font-size: 0.9rem;
+        }
+
+        .confirmation {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 6px;
+            padding: 1rem;
+            color: #166534;
+        }
+
+        .confirmation code {
+            word-break: break-all;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    {% block content %}{% endblock %}
+</body>
+</html>
