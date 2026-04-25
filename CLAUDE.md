@@ -37,6 +37,8 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - Keep FastAPI route files focused on routing and wiring, not business logic
 - Keep external integrations in clearly named modules
 - Avoid broad `except Exception` unless there is a clear reason and logging
+- Write Python using modern, idiomatic Python 3.12 style: prefer `str | None` over `Optional[str]`, built-in collection types like `list[str]` and `dict[str, str]` over `typing.List`/`typing.Dict`, explicit imports, clear type hints, small focused functions/modules, and straightforward readable code. Avoid older Python compatibility patterns unless they are required by a dependency.
+- Do not install individual Python packages directly with `.venv/bin/pip install package_name` when they are already declared in `pyproject.toml`. Use `uv sync --extra dev` and `uv run ...` when using uv, or `.venv/bin/python -m pip install -e ".[dev]"` if not using uv. Do not use Homebrew for project-level Python dependencies.
 
 ### DRY (Don't Repeat Yourself)
 - Extract repeated code into reusable functions
@@ -62,6 +64,8 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - Write clear commit messages
 - Make small, focused commits
 - Use meaningful branch names following project conventions
+- Use multiple git commit -m flags for multiline commit messages instead of heredoc/EOF syntax, unless heredoc is strictly necessary.
+- Do not include “Generated with Claude Code” or any Claude/AI attribution footer in commit messages, PR bodies, issue comments, or generated documentation unless I explicitly ask for it.
 
 ## AI Interaction Guidelines
 
