@@ -37,6 +37,8 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - Keep FastAPI route files focused on routing and wiring, not business logic
 - Keep external integrations in clearly named modules
 - Avoid broad `except Exception` unless there is a clear reason and logging
+- Write Python using modern, idiomatic Python 3.12 style: prefer `str | None` over `Optional[str]`, built-in collection types like `list[str]` and `dict[str, str]` over `typing.List`/`typing.Dict`, explicit imports, clear type hints, small focused functions/modules, and straightforward readable code. Avoid older Python compatibility patterns unless they are required by a dependency.
+- Do not install individual Python packages directly with `.venv/bin/pip install package_name` when they are already declared in `pyproject.toml`. Use `uv sync --extra dev` and `uv run ...` when using uv, or `.venv/bin/python -m pip install -e ".[dev]"` if not using uv. Do not use Homebrew for project-level Python dependencies.
 
 ### DRY (Don't Repeat Yourself)
 - Extract repeated code into reusable functions
@@ -62,6 +64,24 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - Write clear commit messages
 - Make small, focused commits
 - Use meaningful branch names following project conventions
+- Use multiple git commit -m flags for multiline commit messages instead of heredoc/EOF syntax, unless heredoc is strictly necessary.
+- Do not include “Generated with Claude Code” or any Claude/AI attribution footer in commit messages, PR bodies, issue comments, or generated documentation unless I explicitly ask for it.
+
+Git and pull request workflow:
+- Do not run `git push` or attempt to push branches to GitHub. This will fail because the agent does not have my GitHub credentials.
+- After completing and testing a ticket, stage and commit the changes locally with a clear commit message.
+- After committing, stop and ask me to push the branch.
+- Once I confirm the branch has been pushed, create the pull request with `gh pr create`.
+- Do not create the pull request before I confirm the branch is pushed.
+
+## Pull request convention
+- PR titles must use the format `TICKET-ID: Descriptive title`, where the ticket ID is uppercase and followed by a colon, for example: `ROK-10: Scaffold FastAPI app and basic project structure`.
+- PR descriptions must use this structure: `## Summary`, `## Notes`, and `## Manual test plan`.
+- `## Summary` should list the concrete files, behavior, and project changes introduced by the PR.
+- `## Notes` should explain important implementation decisions, tradeoffs, or intentionally avoided approaches.
+- `## Manual test plan` should only include manual verification that the agent cannot perform itself, such as opening the app in a browser, confirming the homepage renders, submitting the form through the UI, or visually checking error/success states, etc.
+- Do not duplicate automated test coverage in the manual test plan. If automated tests were added or run, mention them briefly in `## Notes` only when useful.
+- Do not include AI attribution footers or “Generated with Claude Code” text in the PR title or body.
 
 ## AI Interaction Guidelines
 
