@@ -67,6 +67,14 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - Use multiple git commit -m flags for multiline commit messages instead of heredoc/EOF syntax, unless heredoc is strictly necessary.
 - Do not include “Generated with Claude Code” or any Claude/AI attribution footer in commit messages, PR bodies, issue comments, or generated documentation unless I explicitly ask for it.
 
+## Pull request convention:
+- PR titles must use the format `TICKET-ID: Descriptive title`, where the ticket ID is uppercase and followed by a colon, for example: `ROK-10: Scaffold FastAPI app and basic project structure`.
+- PR descriptions must use this structure: `## Summary`, `## Notes`, and `## Test plan`.
+- `## Summary` should list the concrete files, behavior, and project changes introduced by the PR.
+- `## Notes` should explain important implementation decisions, tradeoffs, or intentionally avoided approaches.
+- `## Test plan` should include checkbox items for the commands run and any manual verification performed.
+- Do not include AI attribution footers or “Generated with Claude Code” text in the PR title or body.
+
 ## AI Interaction Guidelines
 
 ### Information Verification
