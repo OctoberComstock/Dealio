@@ -4,7 +4,6 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas import (
-    BetterAlternative,
     Confidence,
     EvidenceItem,
     ResearchResult,

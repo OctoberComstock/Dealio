@@ -66,11 +66,12 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - Use meaningful branch names following project conventions
 - Use multiple git commit -m flags for multiline commit messages instead of heredoc/EOF syntax, unless heredoc is strictly necessary.
 - Do not include “Generated with Claude Code” or any Claude/AI attribution footer in commit messages, PR bodies, issue comments, or generated documentation unless I explicitly ask for it.
-- Do not run `git push`, `git pull` or attempt to push branches to GitHub. These will fail because the agent does not have my GitHub credentials.
+- Do not run `git push`, `git pull` or attempt to push to GitHub. These will fail because the agent does not have my GitHub credentials.
 - After completing and testing a ticket, stage and commit the changes locally with a clear commit message.
 - After committing, stop and ask me to push the branch.
 - Once I confirm the branch has been pushed, create the pull request with `gh pr create`.
 - Do not create the pull request before I confirm the branch is pushed.
+- For git commands, assume the shell is already in the project root unless there is evidence otherwise. Use normal commands like `git status`, `git add ...`, and `git commit -m ...`; avoid `git -C /absolute/path ...` unless the working directory is unknown or wrong.
 
 ## Pull request convention
 - PR titles must use the format `TICKET-ID: Descriptive title`, where the ticket ID is uppercase and followed by a colon, for example: `ROK-10: Scaffold FastAPI app and basic project structure`.
@@ -93,6 +94,9 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - Don't remove unrelated code or functionalities
 - Preserve existing structures and patterns
 - Do not rewrite unrelated files or unrelated lines of code.
+- Minimize shell commands. Do not run commands just to confirm obvious state or restate information already visible in the current context.
+- Before running a shell command, decide whether it is necessary to complete the current ticket or verify behavior that cannot be checked from the provided files.
+- Prefer reading/editing the current files directly over running exploratory commands.
 
 ### Communication Style
 - Avoid apologies in responses
