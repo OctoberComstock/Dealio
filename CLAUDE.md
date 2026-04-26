@@ -66,7 +66,7 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - Use meaningful branch names following project conventions
 - Use multiple git commit -m flags for multiline commit messages instead of heredoc/EOF syntax, unless heredoc is strictly necessary.
 - Do not include “Generated with Claude Code” or any Claude/AI attribution footer in commit messages, PR bodies, issue comments, or generated documentation unless I explicitly ask for it.
-- Do not run `git push` or attempt to push branches to GitHub. This will fail because the agent does not have my GitHub credentials.
+- Do not run `git push`, `git pull` or attempt to push branches to GitHub. These will fail because the agent does not have my GitHub credentials.
 - After completing and testing a ticket, stage and commit the changes locally with a clear commit message.
 - After committing, stop and ask me to push the branch.
 - Once I confirm the branch has been pushed, create the pull request with `gh pr create`.
