@@ -78,7 +78,7 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - PR descriptions must use this structure: `## Summary`, `## Notes`, and `## Manual test plan`.
 - `## Summary` should list the concrete files, behavior, and project changes introduced by the PR.
 - `## Notes` should explain important implementation decisions, tradeoffs, or intentionally avoided approaches.
-- `## Manual test plan` should only include manual verification that the agent cannot perform itself, such as opening the app in a browser, confirming the homepage renders, submitting the form through the UI, or visually checking error/success states, etc.
+- `## Manual test plan` should only include manual verification that covers what is actually currently testable and the agent cannot perform itself, such as opening the app in a browser, confirming the homepage renders, submitting the form through the UI, or visually checking error/success states, etc.
 - Do not duplicate automated test coverage in the manual test plan. If automated tests were added or run, mention them briefly in `## Notes` only when useful.
 - Do not include AI attribution footers or “Generated with Claude Code” text in the PR title or body.
 
