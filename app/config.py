@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     tavily_max_results_per_query: int = 5
 
     anthropic_api_key: str = ""
+    anthropic_model: str = ""
 
     max_searches: int = 5
     max_fetched_pages: int = 8
