@@ -15,3 +15,9 @@ def test_tavily_config_overridable_via_env(monkeypatch):
     settings = Settings()
     assert settings.tavily_search_depth == "advanced"
     assert settings.tavily_max_results_per_query == 10
+
+
+def test_anthropic_model_overridable_via_env(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-opus-4-7")
+    settings = Settings()
+    assert settings.anthropic_model == "claude-opus-4-7"
