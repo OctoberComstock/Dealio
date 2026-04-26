@@ -5,6 +5,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     tavily_api_key: str = ""
+    tavily_search_depth: str = "basic"
+    tavily_max_results_per_query: int = 5
+
     anthropic_api_key: str = ""
 
     max_searches: int = 5
