@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block extra_styles %}
+<style>
+    main {
+        max-width: 640px;
+    }
+
+    .back-link {
+        display: inline-block;
+        margin-bottom: 1.5rem;
+        color: #2563eb;
+        text-decoration: none;
+        font-size: 0.9rem;
+    }
+
+    .back-link:hover {
+        text-decoration: underline;
+    }
+
+    .product-name {
+        font-size: 1.5rem;
+        margin: 0 0 0.25rem;
+    }
+
+    .product-meta {
+        color: #555;
+        margin: 0 0 1.5rem;
+        font-size: 0.95rem;
+    }
+
+    .verdict-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .verdict-badge {
+        padding: 0.35rem 0.75rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .verdict-badge.good-deal  { background: #dcfce7; color: #166534; }
+    .verdict-badge.fair       { background: #fef9c3; color: #854d0e; }
+    .verdict-badge.overpriced { background: #fee2e2; color: #991b1b; }
+    .verdict-badge.insufficient-data { background: #f3f4f6; color: #374151; }
+
+    .confidence-label {
+        color: #555;
+        font-size: 0.9rem;
+    }
+
+    .summary {
+        margin: 0 0 1.5rem;
+        line-height: 1.6;
+    }
+
+    .section-heading {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0 0 0.75rem;
+    }
+
+    .evidence-list {
+        margin: 0 0 1.5rem;
+        padding: 0;
+        list-style: none;
+    }
+
+    .evidence-item {
+        padding: 0.75rem 0;
+        border-top: 1px solid #e5e7eb;
+        line-height: 1.5;
+        font-size: 0.95rem;
+    }
+
+    .evidence-item:last-child {
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .source-link {
+        display: inline-block;
+        margin-left: 0.5rem;
+        color: #2563eb;
+        font-size: 0.8rem;
+        text-decoration: none;
+    }
+
+    .source-link:hover {
+        text-decoration: underline;
+    }
+
+    .alternative-card {
+        background: #f0f9ff;
+        border: 1px solid #bae6fd;
+        border-radius: 6px;
+        padding: 1rem;
+        margin: 0.5rem 0 1.5rem;
+    }
+
+    .alt-product-name {
+        font-weight: 600;
+        margin: 0 0 0.25rem;
+    }
+
+    .alt-price {
+        color: #555;
+        font-size: 0.9rem;
+        margin: 0 0 0.5rem;
+    }
+
+    .alt-reason {
+        margin: 0 0 0.75rem;
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+
+    .alt-link {
+        color: #2563eb;
+        font-size: 0.9rem;
+        text-decoration: none;
+    }
+
+    .alt-link:hover {
+        text-decoration: underline;
+    }
+
+    .last-checked {
+        margin-top: 2rem;
+        color: #6b7280;
+        font-size: 0.85rem;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<main>
+    <a href="/" class="back-link">← Check another product</a>
+
+    <h1 class="product-name">{{ result.product_name }}</h1>
+    <p class="product-meta">
+        {{ result.merchant }}{% if result.listed_price %} · {{ result.listed_price }}{% endif %}
+    </p>
+
+    <div class="verdict-row">
+        <span class="verdict-badge {{ result.verdict.value.replace('_', '-') }}">
+            {{ result.verdict.value.replace('_', ' ').title() }}
+        </span>
+        <span class="confidence-label">{{ result.confidence.value.title() }} confidence</span>
+    </div>
+
+    <p class="summary">{{ result.summary }}</p>
+
+    {% if result.evidence %}
+    <h2 class="section-heading">Evidence</h2>
+    <ul class="evidence-list">
+        {% for item in result.evidence %}
+        <li class="evidence-item">
+            {{ item.text }}
+            <a class="source-link" href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">source ↗</a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if result.alternative %}
+    <h2 class="section-heading">Consider instead</h2>
+    <div class="alternative-card">
+        <p class="alt-product-name">{{ result.alternative.product_name }}</p>
+        {% if result.alternative.price %}
+        <p class="alt-price">{{ result.alternative.price }}</p>
+        {% endif %}
+        <p class="alt-reason">{{ result.alternative.reason }}</p>
+        <a class="alt-link" href="{{ result.alternative.source_url }}" target="_blank" rel="noopener noreferrer">View product ↗</a>
+    </div>
+    {% endif %}
+
+    <p class="last-checked">Checked {{ checked_at.strftime('%-d %B %Y at %H:%M UTC') }}</p>
+</main>
+{% endblock %}

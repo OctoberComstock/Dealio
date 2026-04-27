@@ -8,6 +8,7 @@ import pytest
 from app.database import (
     delete_expired_cache_artifacts,
     init_db,
+    load_research_run,
     save_cache_artifact,
     save_research_run,
 )
@@ -81,6 +82,41 @@ async def test_save_research_run_persists_created_at(db_path):
         cursor = await db.execute("SELECT created_at FROM research_runs")
         row = await cursor.fetchone()
     assert row[0] is not None and row[0] != ""
+
+
+async def test_load_research_run_returns_none_for_missing_id(db_path):
+    result = await load_research_run(db_path, "nonexistent-id")
+    assert result is None
+
+
+async def test_load_research_run_returns_payload_by_id(db_path):
+    payload = {"verdict": "good_deal", "confidence": "high"}
+    run_id = await save_research_run(db_path, "https://example.com/product", payload, CHECKED_AT)
+    run = await load_research_run(db_path, run_id)
+    assert run is not None
+    assert run["result_payload"] == payload
+
+
+async def test_load_research_run_returns_correct_id(db_path):
+    payload = {"verdict": "fair"}
+    run_id = await save_research_run(db_path, "https://example.com/product", payload, CHECKED_AT)
+    run = await load_research_run(db_path, run_id)
+    assert run["id"] == run_id
+
+
+async def test_load_research_run_returns_checked_at(db_path):
+    run_id = await save_research_run(db_path, "https://example.com/product", {}, CHECKED_AT)
+    run = await load_research_run(db_path, run_id)
+    assert run["checked_at"] == CHECKED_AT.isoformat()
+
+
+async def test_load_research_run_does_not_return_other_run(db_path):
+    payload_a = {"verdict": "good_deal"}
+    payload_b = {"verdict": "overpriced"}
+    run_id_a = await save_research_run(db_path, "https://example.com/a", payload_a, CHECKED_AT)
+    await save_research_run(db_path, "https://example.com/b", payload_b, CHECKED_AT)
+    run = await load_research_run(db_path, run_id_a)
+    assert run["result_payload"] == payload_a
 
 
 async def test_save_cache_artifact_returns_uuid(db_path):
