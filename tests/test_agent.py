@@ -295,6 +295,81 @@ async def test_fallback_does_not_preserve_misleading_summary(
     assert "good" not in result.summary.lower() or "not" in result.summary.lower()
 
 
+async def test_high_confidence_two_distinct_observed_sources_passes(
+    mock_create, extraction, identity
+):
+    search_result = SearchResult(
+        title="Widget Review",
+        url="https://reviews.example.com/widget",
+        snippet="Solid product.",
+        metadata={"source": "tavily", "score": 0.9},
+    )
+    verdict = {
+        **VALID_VERDICT,
+        "confidence": "high",
+        "evidence": [
+            {"text": "Price check.", "source_url": "https://example.com/product"},
+            {"text": "Review found.", "source_url": "https://reviews.example.com/widget"},
+            {"text": "Market average.", "source_url": "https://example.com/product"},
+        ],
+    }
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "widget"}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict, "b2")),
+    ]
+    with patch("app.agent.search_web", new_callable=AsyncMock) as mock_search:
+        mock_search.return_value = [search_result]
+        result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert result.confidence.value == "high"
+
+
+async def test_alternative_url_not_observed_falls_back_to_insufficient_data(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "alternative": {
+            "product_name": "Widget Pro",
+            "price": "$25.00",
+            "reason": "Cheaper option",
+            "source_url": "https://fabricated.example.com/widget-pro",
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+
+
+async def test_url_validation_accepts_normalized_variant(mock_create, extraction, identity):
+    fetched = FetchedPage(
+        url="https://shop.example.com/widget/",
+        title="Widget",
+        content="Great product at $29.99",
+        price_guess="$29.99",
+    )
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Price found.", "source_url": "https://shop.example.com/widget"},
+            {"text": "Market check.", "source_url": "https://example.com/product"},
+            {"text": "Reviews checked.", "source_url": "https://example.com/product"},
+        ],
+    }
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block("fetch_page", {"url": "https://shop.example.com/widget/"}, "b1")
+        ),
+        make_response(make_tool_block("submit_verdict", verdict, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = fetched
+        result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+
+
 async def test_fallback_result_is_valid_research_result(mock_create, extraction, identity):
     verdict = {**VALID_VERDICT, "evidence": []}
     mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
