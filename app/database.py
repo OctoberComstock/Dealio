@@ -96,6 +96,18 @@ async def save_cache_artifact(
     return artifact_id
 
 
+async def load_research_run(db_path: str, run_id: str) -> dict | None:
+    async with aiosqlite.connect(db_path) as db:
+        cursor = await db.execute(
+            "SELECT id, result_payload, checked_at FROM research_runs WHERE id = ?",
+            (run_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return {"id": row[0], "result_payload": json.loads(row[1]), "checked_at": row[2]}
+
+
 async def delete_expired_cache_artifacts(db_path: str) -> int:
     now = datetime.now(timezone.utc).isoformat()
     async with aiosqlite.connect(db_path) as db:
