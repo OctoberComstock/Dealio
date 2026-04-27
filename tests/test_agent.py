@@ -31,10 +31,12 @@ VALID_VERDICT = {
     "merchant": "example.com",
     "listed_price": "$29.99",
     "verdict": "good_deal",
-    "confidence": "high",
-    "summary": "Competitively priced and well-reviewed.",
+    "confidence": "medium",
+    "summary": "Competitively priced across comparable listings.",
     "evidence": [
-        {"text": "Lowest price found.", "source_url": "https://example.com/product"}
+        {"text": "Listed at $29.99, below market average.", "source_url": "https://example.com/product"},
+        {"text": "Comparable models sell for $35–$40.", "source_url": "https://example.com/product"},
+        {"text": "Customer reviews are consistently positive.", "source_url": "https://example.com/product"},
     ],
     "alternative": None,
 }
@@ -91,7 +93,7 @@ async def test_submit_verdict_validates_into_research_result(mock_create, extrac
     result = await run_research_agent("https://example.com/product", extraction, identity)
     assert isinstance(result, ResearchResult)
     assert result.verdict.value == "good_deal"
-    assert result.confidence.value == "high"
+    assert result.confidence.value == "medium"
     assert result.product_name == "Great Widget"
 
 
@@ -146,8 +148,6 @@ async def test_tool_errors_are_returned_as_tool_results(mock_create, extraction,
         mock_search.side_effect = ValueError("Tavily API key is not configured")
         await run_research_agent("https://example.com/product", extraction, identity)
     assert mock_create.call_count == 2
-    # messages[-2]: the list is mutated after the second call (assistant reply appended),
-    # so the tool result user message is at index -2, not -1.
     tool_result = mock_create.call_args_list[1].kwargs["messages"][-2]["content"][0]["content"]
     assert "Search error" in tool_result
 
@@ -184,41 +184,252 @@ async def test_loop_guard_prevents_infinite_loops(mock_create, extraction, ident
             await run_research_agent("https://example.com/product", extraction, identity)
 
 
-async def test_invalid_submit_verdict_payload_raises_error(mock_create, extraction, identity):
-    mock_create.return_value = make_response(
-        make_tool_block("submit_verdict", {"product_name": "Widget"})
-    )
-    with pytest.raises(ValueError, match="Invalid verdict payload"):
-        await run_research_agent("https://example.com/product", extraction, identity)
+# --- Validation fallback tests ---
 
 
-async def test_evidence_url_not_in_seen_urls_raises_error(mock_create, extraction, identity):
+async def test_malformed_verdict_payload_falls_back_to_insufficient_data(
+    mock_create, extraction, identity
+):
+    bad_verdict = {"product_name": "Widget"}  # missing required fields
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", bad_verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+    assert isinstance(result, ResearchResult)
+
+
+async def test_too_few_evidence_items_falls_back_to_insufficient_data(
+    mock_create, extraction, identity
+):
     verdict = {
         **VALID_VERDICT,
         "evidence": [
-            {"text": "Fake source.", "source_url": "https://fabricated.example.com/fake"}
+            {"text": "Only one source.", "source_url": "https://example.com/product"}
         ],
     }
     mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
-    with pytest.raises(ValueError, match="not observed in tool results"):
-        await run_research_agent("https://example.com/product", extraction, identity)
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
 
 
-async def test_alternative_url_not_in_seen_urls_raises_error(mock_create, extraction, identity):
+async def test_supported_verdict_with_five_evidence_items_passes(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": f"Source {i}.", "source_url": "https://example.com/product"}
+            for i in range(5)
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert len(result.evidence) == 5
+
+
+async def test_six_evidence_items_truncated_to_five_with_valid_verdict(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": f"Source {i}.", "source_url": "https://example.com/product"}
+            for i in range(6)
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert len(result.evidence) == 5
+
+
+async def test_invalid_evidence_url_beyond_five_still_caught(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": f"Valid source {i}.", "source_url": "https://example.com/product"}
+            for i in range(5)
+        ] + [
+            {"text": "Fabricated.", "source_url": "https://fabricated.example.com/bad"}
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+
+
+async def test_insufficient_data_with_zero_evidence_passes(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "verdict": "insufficient_data",
+        "confidence": "low",
+        "summary": "Could not find enough pricing data.",
+        "evidence": [],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert isinstance(result, ResearchResult)
+    assert result.verdict.value == "insufficient_data"
+    assert result.evidence == []
+
+
+async def test_high_confidence_single_distinct_source_falls_back_to_insufficient_data(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "confidence": "high",
+        "evidence": [
+            {"text": f"Source {i}.", "source_url": "https://example.com/product"}
+            for i in range(3)
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+
+
+async def test_unobserved_evidence_url_falls_back_to_insufficient_data(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Fake source.", "source_url": "https://fabricated.example.com/fake"},
+            {"text": "Another.", "source_url": "https://fabricated.example.com/fake2"},
+            {"text": "Third.", "source_url": "https://fabricated.example.com/fake3"},
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+
+
+async def test_invalid_alternative_falls_back_to_insufficient_data(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "alternative": {
+            "product_name": "Widget Pro",
+            "price": "$35.00",
+            "reason": "Not actually better",
+            "source_url": "https://example.com/product",
+            "is_cheaper": False,
+            "is_better_reviewed": False,
+        },
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+
+
+async def test_fallback_does_not_preserve_misleading_summary(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "verdict": "good_deal",
+        "summary": "This is a great deal at a very low price.",
+        "evidence": [
+            {"text": "Only one piece of evidence.", "source_url": "https://example.com/product"}
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+    assert "great deal" not in result.summary
+    assert "good" not in result.summary.lower() or "not" in result.summary.lower()
+
+
+async def test_high_confidence_two_distinct_observed_sources_passes(
+    mock_create, extraction, identity
+):
+    search_result = SearchResult(
+        title="Widget Review",
+        url="https://reviews.example.com/widget",
+        snippet="Solid product.",
+        metadata={"source": "tavily", "score": 0.9},
+    )
+    verdict = {
+        **VALID_VERDICT,
+        "confidence": "high",
+        "evidence": [
+            {"text": "Price check.", "source_url": "https://example.com/product"},
+            {"text": "Review found.", "source_url": "https://reviews.example.com/widget"},
+            {"text": "Market average.", "source_url": "https://example.com/product"},
+        ],
+    }
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "widget"}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict, "b2")),
+    ]
+    with patch("app.agent.search_web", new_callable=AsyncMock) as mock_search:
+        mock_search.return_value = [search_result]
+        result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert result.confidence.value == "high"
+
+
+async def test_alternative_url_not_observed_falls_back_to_insufficient_data(
+    mock_create, extraction, identity
+):
     verdict = {
         **VALID_VERDICT,
         "alternative": {
             "product_name": "Widget Pro",
             "price": "$25.00",
-            "reason": "Better value",
-            "source_url": "https://fabricated.example.com/alt",
+            "reason": "Cheaper option",
+            "source_url": "https://fabricated.example.com/widget-pro",
             "is_cheaper": True,
             "is_better_reviewed": False,
         },
     }
     mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
-    with pytest.raises(ValueError, match="not observed in tool results"):
-        await run_research_agent("https://example.com/product", extraction, identity)
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+
+
+async def test_url_validation_accepts_normalized_variant(mock_create, extraction, identity):
+    fetched = FetchedPage(
+        url="https://shop.example.com/widget/",
+        title="Widget",
+        content="Great product at $29.99",
+        price_guess="$29.99",
+    )
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Price found.", "source_url": "https://shop.example.com/widget"},
+            {"text": "Market check.", "source_url": "https://example.com/product"},
+            {"text": "Reviews checked.", "source_url": "https://example.com/product"},
+        ],
+    }
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block("fetch_page", {"url": "https://shop.example.com/widget/"}, "b1")
+        ),
+        make_response(make_tool_block("submit_verdict", verdict, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = fetched
+        result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+
+
+async def test_fallback_result_is_valid_research_result(mock_create, extraction, identity):
+    verdict = {**VALID_VERDICT, "evidence": []}
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert isinstance(result, ResearchResult)
+    assert result.verdict.value == "insufficient_data"
+    assert result.confidence.value == "low"
+    assert result.evidence == []
+    assert result.alternative is None
 
 
 # --- System prompt tests ---
@@ -262,3 +473,8 @@ def test_system_prompt_defines_pricing_thresholds():
 
 def test_system_prompt_excludes_different_product_comparisons():
     assert "Do not compare" in SYSTEM_PROMPT
+
+
+def test_system_prompt_defines_alternative_rules():
+    assert "10%" in SYSTEM_PROMPT
+    assert "is_cheaper" in SYSTEM_PROMPT or "cheaper" in SYSTEM_PROMPT
