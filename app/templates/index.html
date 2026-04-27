@@ -1,4 +1,18 @@
 {% extends "base.html" %}
+{% block extra_styles %}
+<style>
+    .submit-button:disabled {
+        background: #93c5fd;
+        cursor: not-allowed;
+    }
+
+    .loading-message {
+        color: #555;
+        margin: 0.75rem 0 0;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
 {% block content %}
 <main>
     <h1>Dealio</h1>
@@ -22,9 +36,21 @@
         >
         <button class="submit-button" type="submit">Check deal</button>
     </form>
+    <p id="loading-message" class="loading-message" hidden>
+        Researching this product — this can take up to 45 seconds.
+    </p>
     {% if error %}
     <p class="error-message">{{ error }}</p>
     {% endif %}
+    <script>
+        document.querySelector('.url-form').addEventListener('submit', function () {
+            var btn = this.querySelector('.submit-button');
+            btn.disabled = true;
+            btn.textContent = 'Researching…';
+            this.setAttribute('aria-busy', 'true');
+            document.getElementById('loading-message').hidden = false;
+        });
+    </script>
     {% endif %}
 </main>
 {% endblock %}
