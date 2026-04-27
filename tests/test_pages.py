@@ -46,6 +46,18 @@ async def test_homepage_renders(client):
     assert 'name="product_url"' in response.text
 
 
+async def test_homepage_loading_message_is_initially_hidden(client):
+    response = await client.get("/")
+    assert 'id="loading-message"' in response.text
+    assert "hidden" in response.text
+
+
+async def test_error_page_loading_message_is_initially_hidden(client):
+    response = await client.post("/", data={"product_url": "not-a-url"})
+    assert 'id="loading-message"' in response.text
+    assert "hidden" in response.text
+
+
 async def test_submit_empty_url_returns_error(client):
     response = await client.post("/", data={"product_url": ""})
     assert response.status_code == 422
