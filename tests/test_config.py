@@ -21,3 +21,9 @@ def test_anthropic_model_overridable_via_env(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_MODEL", "claude-opus-4-7")
     settings = Settings()
     assert settings.anthropic_model == "claude-opus-4-7"
+
+
+def test_agent_timeout_overridable_via_env(monkeypatch):
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "30")
+    settings = Settings()
+    assert settings.agent_timeout_seconds == 30
