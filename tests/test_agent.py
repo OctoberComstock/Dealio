@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -174,14 +175,89 @@ async def test_unknown_tool_returns_clean_error(mock_create, extraction, identit
     assert "Unknown tool" in tool_result
 
 
-async def test_loop_guard_prevents_infinite_loops(mock_create, extraction, identity):
+async def test_loop_guard_falls_back_to_insufficient_data(mock_create, extraction, identity):
     mock_create.return_value = make_response(
         make_tool_block("search_web", {"query": "widget"}, "b1")
     )
     with patch("app.agent.search_web", new_callable=AsyncMock) as mock_search:
         mock_search.return_value = []
-        with pytest.raises(ValueError, match="exceeded"):
+        result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+    assert isinstance(result, ResearchResult)
+
+
+async def test_search_budget_exhaustion_does_not_execute_extra_searches(
+    mock_create, extraction, identity
+):
+    with patch("app.agent.settings") as mock_settings:
+        mock_settings.max_searches = 1
+        mock_settings.max_fetched_pages = 8
+        mock_settings.agent_timeout_seconds = 45
+        mock_create.side_effect = [
+            make_response(make_tool_block("search_web", {"query": "s1"}, "b1")),
+            make_response(make_tool_block("search_web", {"query": "s2"}, "b2")),
+            make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b3")),
+        ]
+        with patch("app.agent.search_web", new_callable=AsyncMock) as mock_search:
+            mock_search.return_value = []
+            result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert mock_search.call_count == 1
+    assert isinstance(result, ResearchResult)
+
+
+async def test_search_budget_exhaustion_returns_submit_verdict_guidance(
+    mock_create, extraction, identity
+):
+    with patch("app.agent.settings") as mock_settings:
+        mock_settings.max_searches = 1
+        mock_settings.max_fetched_pages = 8
+        mock_settings.agent_timeout_seconds = 45
+        mock_create.side_effect = [
+            make_response(make_tool_block("search_web", {"query": "s1"}, "b1")),
+            make_response(make_tool_block("search_web", {"query": "s2"}, "b2")),
+            make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b3")),
+        ]
+        with patch("app.agent.search_web", new_callable=AsyncMock) as mock_search:
+            mock_search.return_value = []
             await run_research_agent("https://example.com/product", extraction, identity)
+    # The second call's messages contain the budget exhaustion tool result
+    tool_result = mock_create.call_args_list[2].kwargs["messages"][-2]["content"][0]["content"]
+    assert "submit_verdict" in tool_result
+
+
+async def test_fetch_budget_exhaustion_does_not_execute_extra_fetches(
+    mock_create, extraction, identity
+):
+    with patch("app.agent.settings") as mock_settings:
+        mock_settings.max_searches = 5
+        mock_settings.max_fetched_pages = 1
+        mock_settings.agent_timeout_seconds = 45
+        mock_create.side_effect = [
+            make_response(make_tool_block("fetch_page", {"url": "https://example.com/p1"}, "b1")),
+            make_response(make_tool_block("fetch_page", {"url": "https://example.com/p2"}, "b2")),
+            make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b3")),
+        ]
+        with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = FetchedPage(
+                url="https://example.com/p1",
+                title="Product",
+                content="Great widget.",
+                price_guess="$29.99",
+            )
+            result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert mock_fetch.call_count == 1
+    assert isinstance(result, ResearchResult)
+
+
+async def test_runtime_timeout_falls_back_to_insufficient_data(extraction, identity):
+    def raise_timeout(coro, **kwargs):
+        coro.close()
+        raise asyncio.TimeoutError()
+
+    with patch("asyncio.wait_for", side_effect=raise_timeout):
+        result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+    assert isinstance(result, ResearchResult)
 
 
 # --- Validation fallback tests ---

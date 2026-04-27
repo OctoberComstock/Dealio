@@ -1,5 +1,7 @@
+import asyncio
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import anthropic
@@ -17,6 +19,12 @@ from app.tools.search_web import search_web
 logger = logging.getLogger(__name__)
 
 _MAX_ITERATIONS = 10
+
+
+@dataclass
+class _RemainingToolBudget:
+    searches_remaining: int
+    fetches_remaining: int
 
 
 def _observe_url(url: str, seen_urls: set[str]) -> None:
@@ -60,8 +68,21 @@ def _format_fetched_page(page) -> str:
     ])
 
 
-async def _execute_tool(tool_name: str, tool_input: dict, seen_urls: set[str]) -> str:
+async def _execute_tool(
+    tool_name: str,
+    tool_input: dict,
+    seen_urls: set[str],
+    budget: _RemainingToolBudget,
+) -> str:
     if tool_name == "search_web":
+        if budget.searches_remaining <= 0:
+            logger.warning("Search budget exhausted (max_searches=%d)", settings.max_searches)
+            return (
+                "Search budget exhausted. You have reached the maximum number of searches. "
+                "Call submit_verdict with the evidence gathered so far."
+            )
+        # Decrement before executing so malformed or failed calls still consume budget.
+        budget.searches_remaining -= 1
         query = tool_input.get("query")
         if not query:
             return "Tool error: 'query' is required for search_web."
@@ -74,6 +95,16 @@ async def _execute_tool(tool_name: str, tool_input: dict, seen_urls: set[str]) -
             return f"Search error: {exc}"
 
     if tool_name == "fetch_page":
+        if budget.fetches_remaining <= 0:
+            logger.warning(
+                "Fetch budget exhausted (max_fetched_pages=%d)", settings.max_fetched_pages
+            )
+            return (
+                "Fetch budget exhausted. You have reached the maximum number of page fetches. "
+                "Call submit_verdict with the evidence gathered so far."
+            )
+        # Decrement before executing so malformed or failed calls still consume budget.
+        budget.fetches_remaining -= 1
         url = tool_input.get("url")
         if not url:
             return "Tool error: 'url' is required for fetch_page."
@@ -177,7 +208,7 @@ def _build_research_result(
         return _build_fallback_result(verdict_input, extraction, identity)
 
 
-async def run_research_agent(
+async def _run_agent_loop(
     normalized_url: str,
     extraction: ProductPageExtraction,
     identity: ProductIdentity,
@@ -185,6 +216,10 @@ async def run_research_agent(
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     seen_urls: set[str] = set()
     _observe_url(normalized_url, seen_urls)
+    budget = _RemainingToolBudget(
+        searches_remaining=settings.max_searches,
+        fetches_remaining=settings.max_fetched_pages,
+    )
     messages = [
         {
             "role": "user",
@@ -206,7 +241,10 @@ async def run_research_agent(
         tool_use_blocks = [block for block in response.content if block.type == "tool_use"]
 
         if not tool_use_blocks:
-            raise ValueError("Agent stopped without calling submit_verdict.")
+            logger.warning(
+                "Agent stopped without calling submit_verdict, returning insufficient_data"
+            )
+            return _build_fallback_result({}, extraction, identity)
 
         tool_results = []
         verdict_input = None
@@ -220,7 +258,9 @@ async def run_research_agent(
                     "content": "Verdict received.",
                 })
             else:
-                result_content = await _execute_tool(block.name, block.input, seen_urls)
+                result_content = await _execute_tool(
+                    block.name, block.input, seen_urls, budget
+                )
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
@@ -232,4 +272,25 @@ async def run_research_agent(
 
         messages.append({"role": "user", "content": tool_results})
 
-    raise ValueError(f"Agent exceeded the maximum number of iterations ({_MAX_ITERATIONS}).")
+    logger.warning(
+        "Agent reached maximum iterations (%d), returning insufficient_data", _MAX_ITERATIONS
+    )
+    return _build_fallback_result({}, extraction, identity)
+
+
+async def run_research_agent(
+    normalized_url: str,
+    extraction: ProductPageExtraction,
+    identity: ProductIdentity,
+) -> ResearchResult:
+    try:
+        return await asyncio.wait_for(
+            _run_agent_loop(normalized_url, extraction, identity),
+            timeout=settings.agent_timeout_seconds,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Agent timed out after %d seconds, returning insufficient_data",
+            settings.agent_timeout_seconds,
+        )
+        return _build_fallback_result({}, extraction, identity)
