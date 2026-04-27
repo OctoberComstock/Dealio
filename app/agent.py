@@ -93,9 +93,6 @@ def _validate_verdict_rules(verdict_input: dict, seen_urls: set[str]) -> None:
     confidence = verdict_input.get("confidence", "")
     count = len(evidence)
 
-    if count > 5:
-        raise ValueError(f"Evidence must contain at most 5 items, got {count}.")
-
     if verdict != "insufficient_data" and count < 3:
         raise ValueError(
             f"Supported verdicts require at least 3 evidence items, got {count}."
@@ -169,7 +166,7 @@ def _build_research_result(
             verdict=verdict_input["verdict"],
             confidence=verdict_input["confidence"],
             summary=verdict_input["summary"],
-            evidence=verdict_input.get("evidence", []),
+            evidence=verdict_input.get("evidence", [])[:5],
             alternative=verdict_input.get("alternative"),
             last_checked=datetime.now(timezone.utc),
         )

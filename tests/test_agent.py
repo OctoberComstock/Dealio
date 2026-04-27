@@ -211,7 +211,23 @@ async def test_too_few_evidence_items_falls_back_to_insufficient_data(
     assert result.verdict.value == "insufficient_data"
 
 
-async def test_too_many_evidence_items_falls_back_to_insufficient_data(
+async def test_supported_verdict_with_five_evidence_items_passes(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": f"Source {i}.", "source_url": "https://example.com/product"}
+            for i in range(5)
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert len(result.evidence) == 5
+
+
+async def test_six_evidence_items_truncated_to_five_with_valid_verdict(
     mock_create, extraction, identity
 ):
     verdict = {
@@ -223,7 +239,42 @@ async def test_too_many_evidence_items_falls_back_to_insufficient_data(
     }
     mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
     result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert len(result.evidence) == 5
+
+
+async def test_invalid_evidence_url_beyond_five_still_caught(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": f"Valid source {i}.", "source_url": "https://example.com/product"}
+            for i in range(5)
+        ] + [
+            {"text": "Fabricated.", "source_url": "https://fabricated.example.com/bad"}
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
     assert result.verdict.value == "insufficient_data"
+
+
+async def test_insufficient_data_with_zero_evidence_passes(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "verdict": "insufficient_data",
+        "confidence": "low",
+        "summary": "Could not find enough pricing data.",
+        "evidence": [],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert isinstance(result, ResearchResult)
+    assert result.verdict.value == "insufficient_data"
+    assert result.evidence == []
 
 
 async def test_high_confidence_single_distinct_source_falls_back_to_insufficient_data(
