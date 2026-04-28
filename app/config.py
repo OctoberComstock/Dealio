@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     parsed_content_cache_ttl_seconds: int = 900
 
     database_path: str = "./dealio.db"
+    render_page_timeout_seconds: int = 30
 
 
 settings = Settings()
