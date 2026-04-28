@@ -178,6 +178,7 @@ TOOLS = [
                     },
                     "required": [
                         "product_name",
+                        "price",
                         "reason",
                         "source_url",
                         "is_cheaper",
