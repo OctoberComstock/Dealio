@@ -135,6 +135,27 @@ async def _execute_tool(
     return f"Unknown tool '{tool_name}'."
 
 
+def _filter_evidence_to_observed(
+    evidence: list[dict], seen_urls: set[str]
+) -> list[dict]:
+    submitted_urls = [str(item.get("source_url") or "") for item in evidence]
+    valid = []
+    had_drop = False
+    for item in evidence:
+        url = str(item.get("source_url") or "")
+        if url and _url_was_observed(url, seen_urls):
+            valid.append(item)
+        else:
+            had_drop = True
+            logger.warning(
+                "Evidence item dropped: source_url %r was not observed in tool results", url
+            )
+    if had_drop:
+        logger.warning("Observed URL set at validation: %s", seen_urls)
+        logger.warning("Submitted evidence URLs: %s", submitted_urls)
+    return valid
+
+
 def _validate_verdict_rules(verdict_input: dict, seen_urls: set[str]) -> None:
     verdict = verdict_input.get("verdict", "")
     evidence = verdict_input.get("evidence", [])
@@ -153,13 +174,6 @@ def _validate_verdict_rules(verdict_input: dict, seen_urls: set[str]) -> None:
         if len(distinct_urls) < 2:
             raise ValueError(
                 "High confidence requires at least 2 distinct evidence source URLs."
-            )
-
-    for item in evidence:
-        url = str(item.get("source_url") or "")
-        if url and not _url_was_observed(url, seen_urls):
-            raise ValueError(
-                f"Evidence source_url was not observed in tool results: {url}"
             )
 
     alternative = verdict_input.get("alternative")
@@ -206,16 +220,19 @@ def _build_research_result(
     identity: ProductIdentity,
 ) -> ResearchResult:
     try:
-        _validate_verdict_rules(verdict_input, seen_urls)
+        evidence_truncated = verdict_input.get("evidence", [])[:5]
+        valid_evidence = _filter_evidence_to_observed(evidence_truncated, seen_urls)
+        filtered_verdict = {**verdict_input, "evidence": valid_evidence}
+        _validate_verdict_rules(filtered_verdict, seen_urls)
         return ResearchResult(
-            product_name=verdict_input["product_name"],
-            merchant=verdict_input["merchant"],
-            listed_price=verdict_input.get("listed_price"),
-            verdict=verdict_input["verdict"],
-            confidence=verdict_input["confidence"],
-            summary=verdict_input["summary"],
-            evidence=verdict_input.get("evidence", [])[:5],
-            alternative=verdict_input.get("alternative"),
+            product_name=filtered_verdict["product_name"],
+            merchant=filtered_verdict["merchant"],
+            listed_price=filtered_verdict.get("listed_price"),
+            verdict=filtered_verdict["verdict"],
+            confidence=filtered_verdict["confidence"],
+            summary=filtered_verdict["summary"],
+            evidence=valid_evidence,
+            alternative=filtered_verdict.get("alternative"),
             last_checked=datetime.now(timezone.utc),
         )
     except (ValueError, ValidationError, KeyError) as exc:

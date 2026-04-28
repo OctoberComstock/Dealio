@@ -28,7 +28,6 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - If a function needs a comment to explain what it does, it should be split
 
 ## Python and FastAPI Guardrails
-
 - Use `is None` and `is not None` for `None` checks
 - Never use mutable default arguments
 - Prefer explicit code over clever code
@@ -39,6 +38,16 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - Avoid broad `except Exception` unless there is a clear reason and logging
 - Write Python using modern, idiomatic Python 3.12 style: prefer `str | None` over `Optional[str]`, built-in collection types like `list[str]` and `dict[str, str]` over `typing.List`/`typing.Dict`, explicit imports, clear type hints, small focused functions/modules, and straightforward readable code. Avoid older Python compatibility patterns unless they are required by a dependency.
 - Do not install individual Python packages directly with `.venv/bin/pip install package_name` when they are already declared in `pyproject.toml`. Use `uv sync --extra dev` and `uv run ...` when using uv, or `.venv/bin/python -m pip install -e ".[dev]"` if not using uv. Do not use Homebrew for project-level Python dependencies.
+
+## Style Preferences
+When choosing between compact Python idioms and readable step-by-step code, default to readable step-by-step code. I would rather have 4 clear lines than 1 dense line.
+
+Style preference:
+- Prefer explicit loops over dense list comprehensions when readability is better.
+- Use intermediate variable names that explain intent.
+- Avoid clever one-liners for logic that affects behavior or validation.
+- List comprehensions are okay for very simple transformations, but if there is fallback logic, filtering, logging, or conditional behavior, use a normal `for` loop.
+- Optimize for code I can quickly read and debug as someone coming from Ruby/Rails.
 
 ### DRY (Don't Repeat Yourself)
 - Extract repeated code into reusable functions
@@ -51,6 +60,7 @@ Dealio is a small FastAPI app that evaluates whether a product listing is a good
 - Write tests before fixing bugs
 - Keep tests readable and maintainable
 - Test edge cases and error conditions
+- Never hardcode dates in tests unless there is a specific date or time you need to test.
 
 ## Quality Maintenance
 

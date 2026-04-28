@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -192,7 +193,7 @@ async def test_search_budget_exhaustion_does_not_execute_extra_searches(
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 1
         mock_settings.max_fetched_pages = 8
-        mock_settings.agent_timeout_seconds = 45
+        mock_settings.agent_timeout_seconds = 60
         mock_create.side_effect = [
             make_response(make_tool_block("search_web", {"query": "s1"}, "b1")),
             make_response(make_tool_block("search_web", {"query": "s2"}, "b2")),
@@ -211,7 +212,7 @@ async def test_search_budget_exhaustion_returns_submit_verdict_guidance(
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 1
         mock_settings.max_fetched_pages = 8
-        mock_settings.agent_timeout_seconds = 45
+        mock_settings.agent_timeout_seconds = 60
         mock_create.side_effect = [
             make_response(make_tool_block("search_web", {"query": "s1"}, "b1")),
             make_response(make_tool_block("search_web", {"query": "s2"}, "b2")),
@@ -231,7 +232,7 @@ async def test_fetch_budget_exhaustion_does_not_execute_extra_fetches(
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 5
         mock_settings.max_fetched_pages = 1
-        mock_settings.agent_timeout_seconds = 45
+        mock_settings.agent_timeout_seconds = 60
         mock_create.side_effect = [
             make_response(make_tool_block("fetch_page", {"url": "https://example.com/p1"}, "b1")),
             make_response(make_tool_block("fetch_page", {"url": "https://example.com/p2"}, "b2")),
@@ -319,9 +320,10 @@ async def test_six_evidence_items_truncated_to_five_with_valid_verdict(
     assert len(result.evidence) == 5
 
 
-async def test_invalid_evidence_url_beyond_five_still_caught(
+async def test_evidence_url_in_position_six_is_truncated_before_validation(
     mock_create, extraction, identity
 ):
+    # Evidence is truncated to 5 before URL validation, so the fabricated 6th item is never seen.
     verdict = {
         **VALID_VERDICT,
         "evidence": [
@@ -333,7 +335,8 @@ async def test_invalid_evidence_url_beyond_five_still_caught(
     }
     mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
     result = await run_research_agent("https://example.com/product", extraction, identity)
-    assert result.verdict.value == "insufficient_data"
+    assert result.verdict.value == "good_deal"
+    assert len(result.evidence) == 5
 
 
 async def test_insufficient_data_with_zero_evidence_passes(
@@ -506,6 +509,135 @@ async def test_fallback_result_is_valid_research_result(mock_create, extraction,
     assert result.confidence.value == "low"
     assert result.evidence == []
     assert result.alternative is None
+
+
+async def test_evidence_url_from_search_result_passes_validation(
+    mock_create, extraction, identity
+):
+    search_url = "https://pricecheck.example.com/product"
+    search_result = SearchResult(
+        title="Price Check",
+        url=search_url,
+        snippet="Listed at $29.99.",
+        metadata={"source": "tavily", "score": 0.9},
+    )
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Price confirmed.", "source_url": search_url},
+            {"text": "Market check.", "source_url": "https://example.com/product"},
+            {"text": "Review found.", "source_url": "https://example.com/product"},
+        ],
+    }
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "widget price"}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict, "b2")),
+    ]
+    with patch("app.agent.search_web", new_callable=AsyncMock) as mock_search:
+        mock_search.return_value = [search_result]
+        result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+
+
+async def test_evidence_url_from_fetched_page_passes_validation(
+    mock_create, extraction, identity
+):
+    fetched_url = "https://pricecheck.example.com/product"
+    fetched = FetchedPage(
+        url=fetched_url,
+        title="Price Check",
+        content="Listed at $29.99.",
+        price_guess="$29.99",
+    )
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Price confirmed.", "source_url": fetched_url},
+            {"text": "Market check.", "source_url": "https://example.com/product"},
+            {"text": "Review found.", "source_url": "https://example.com/product"},
+        ],
+    }
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": fetched_url}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = fetched
+        result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+
+
+async def test_unobserved_evidence_item_dropped_if_three_valid_remain(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Valid 1.", "source_url": "https://example.com/product"},
+            {"text": "Valid 2.", "source_url": "https://example.com/product"},
+            {"text": "Valid 3.", "source_url": "https://example.com/product"},
+            {"text": "Fabricated.", "source_url": "https://fabricated.example.com/bad"},
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert len(result.evidence) == 3
+
+
+async def test_verdict_falls_back_when_pruning_leaves_fewer_than_three(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Valid 1.", "source_url": "https://example.com/product"},
+            {"text": "Valid 2.", "source_url": "https://example.com/product"},
+            {"text": "Fabricated 1.", "source_url": "https://fabricated.example.com/bad1"},
+            {"text": "Fabricated 2.", "source_url": "https://fabricated.example.com/bad2"},
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+
+
+async def test_evidence_with_missing_source_url_is_dropped(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Valid.", "source_url": "https://example.com/product"},
+            {"text": "Valid.", "source_url": "https://example.com/product"},
+            {"text": "Valid.", "source_url": "https://example.com/product"},
+            {"text": "No URL.", "source_url": ""},
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert len(result.evidence) == 3
+
+
+async def test_validation_logs_dropped_evidence_url(
+    mock_create, extraction, identity, caplog
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Valid.", "source_url": "https://example.com/product"},
+            {"text": "Valid.", "source_url": "https://example.com/product"},
+            {"text": "Valid.", "source_url": "https://example.com/product"},
+            {"text": "Fabricated.", "source_url": "https://fabricated.example.com/bad"},
+        ],
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    with caplog.at_level(logging.WARNING, logger="app.agent"):
+        await run_research_agent("https://example.com/product", extraction, identity)
+    messages = [r.message for r in caplog.records]
+    assert any("fabricated.example.com" in m for m in messages)
+    assert any("observed" in m.lower() for m in messages)
 
 
 # --- System prompt tests ---
