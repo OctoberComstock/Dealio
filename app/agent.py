@@ -354,3 +354,10 @@ async def run_research_agent(
             settings.agent_timeout_seconds,
         )
         return _build_fallback_result({}, extraction, identity)
+    except anthropic.APIError as exc:
+        logger.warning(
+            "Anthropic API error (%s), returning insufficient_data: %s",
+            type(exc).__name__,
+            exc,
+        )
+        return _build_fallback_result({}, extraction, identity)
