@@ -107,8 +107,15 @@ async def _execute_tool(
             results = await search_web(query)
             for result in results:
                 _observe_url(str(result.url), seen_urls)
+            logger.info(
+                "search_web: query=%r results=%d searches_remaining=%d",
+                query,
+                len(results),
+                budget.searches_remaining,
+            )
             return _format_search_results(results)
         except ValueError as exc:
+            logger.warning("search_web failed: query=%r error=%s", query, exc)
             return f"Search error: {exc}"
 
     if tool_name == "fetch_page":
@@ -125,11 +132,13 @@ async def _execute_tool(
         url = tool_input.get("url")
         if not url:
             return "Tool error: 'url' is required for fetch_page."
+        logger.info("fetch_page: url=%r fetches_remaining=%d", url, budget.fetches_remaining)
         try:
             page = await fetch_page(url)
             _observe_url(page.url, seen_urls)
             return _format_fetched_page(page)
         except ValueError as exc:
+            logger.warning("fetch_page failed: url=%r error=%s", url, exc)
             return f"Fetch error: {exc}"
 
     return f"Unknown tool '{tool_name}'."
@@ -250,7 +259,7 @@ def _build_research_result(
             "alternative": valid_alternative,
         }
         _validate_verdict_rules(filtered_verdict, seen_urls)
-        return ResearchResult(
+        result = ResearchResult(
             product_name=filtered_verdict["product_name"],
             merchant=filtered_verdict["merchant"],
             listed_price=filtered_verdict.get("listed_price"),
@@ -261,6 +270,14 @@ def _build_research_result(
             alternative=filtered_verdict.get("alternative"),
             last_checked=datetime.now(timezone.utc),
         )
+        logger.info(
+            "Verdict accepted: verdict=%s confidence=%s evidence=%d product=%r",
+            result.verdict.value,
+            result.confidence.value,
+            len(result.evidence),
+            result.product_name,
+        )
+        return result
     except (ValueError, ValidationError, KeyError) as exc:
         logger.warning(
             "Agent verdict failed validation, falling back to insufficient_data: %s", exc
@@ -279,6 +296,12 @@ async def _run_agent_loop(
     budget = _RemainingToolBudget(
         searches_remaining=settings.max_searches,
         fetches_remaining=settings.max_fetched_pages,
+    )
+    logger.info(
+        "Agent loop starting: url=%s identity=%r source=%s",
+        normalized_url,
+        identity.value,
+        identity.source,
     )
     messages = [
         {
@@ -312,6 +335,12 @@ async def _run_agent_loop(
         for block in tool_use_blocks:
             if block.name == "submit_verdict":
                 verdict_input = block.input
+                logger.info(
+                    "submit_verdict received: verdict=%r confidence=%r evidence=%d",
+                    verdict_input.get("verdict"),
+                    verdict_input.get("confidence"),
+                    len(verdict_input.get("evidence", [])),
+                )
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
@@ -332,8 +361,16 @@ async def _run_agent_loop(
 
         messages.append({"role": "user", "content": tool_results})
 
+    searches_used = settings.max_searches - budget.searches_remaining
+    fetches_used = settings.max_fetched_pages - budget.fetches_remaining
     logger.warning(
-        "Agent reached maximum iterations (%d), returning insufficient_data", _MAX_ITERATIONS
+        "Agent reached maximum iterations (%d), returning insufficient_data "
+        "(searches=%d/%d fetches=%d/%d)",
+        _MAX_ITERATIONS,
+        searches_used,
+        settings.max_searches,
+        fetches_used,
+        settings.max_fetched_pages,
     )
     return _build_fallback_result({}, extraction, identity)
 
