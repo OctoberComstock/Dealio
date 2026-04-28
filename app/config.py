@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     database_path: str = "./dealio.db"
     render_page_timeout_seconds: int = 30
+    log_level: str = "DEBUG"
 
 
 settings = Settings()

@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -50,14 +51,34 @@ async def submit_product_url(request: Request, product_url: str = Form(default="
 
     try:
         normalized = normalize_url(product_url.strip())
+        t_start = time.perf_counter()
+        logger.info("Research starting: url=%s", normalized)
+
         extraction = await extract_product(normalized)
         identity = infer_product_identity(extraction, normalized)
+        logger.info(
+            "Product extracted: name=%r price=%r merchant=%r identity=%r source=%s",
+            extraction.product_name,
+            extraction.listed_price,
+            extraction.merchant,
+            identity.value,
+            identity.source,
+        )
+
         result = await run_research_agent(normalized, extraction, identity)
         run_id = await save_research_run(
             settings.database_path,
             normalized,
             result.model_dump(mode="json"),
             result.last_checked,
+        )
+        logger.info(
+            "Research completed: verdict=%s confidence=%s run_id=%s elapsed=%.1fs url=%s",
+            result.verdict.value,
+            result.confidence.value,
+            run_id,
+            time.perf_counter() - t_start,
+            normalized,
         )
     except Exception:
         logger.exception("Research flow failed for URL: %s", product_url)

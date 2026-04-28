@@ -1,8 +1,11 @@
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 
 import aiosqlite
+
+logger = logging.getLogger(__name__)
 
 
 async def init_db(db_path: str) -> None:
@@ -64,6 +67,7 @@ async def save_research_run(
             ),
         )
         await db.commit()
+    logger.info("Research run saved: run_id=%s url=%s", run_id, normalized_url)
     return run_id
 
 
@@ -116,4 +120,7 @@ async def delete_expired_cache_artifacts(db_path: str) -> int:
             (now,),
         )
         await db.commit()
-        return cursor.rowcount
+        count = cursor.rowcount
+    if count:
+        logger.info("Deleted %d expired cache artifacts", count)
+    return count
