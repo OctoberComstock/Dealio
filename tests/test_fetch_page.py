@@ -6,7 +6,6 @@ import pytest
 
 from app.tools.fetch_page import (
     FetchedPage,
-    _check_redirect_url_is_safe,
     _detect_condition_text,
     _detect_listing_count,
     _detect_lowest_price,
@@ -16,6 +15,7 @@ from app.tools.fetch_page import (
     _needs_rendered_fallback,
     _StaticResult,
     _validate_fetch_url,
+    _validate_fetch_url_and_resolved_host,
     _validate_resolved_addresses_are_safe,
     fetch_page,
 )
@@ -763,18 +763,28 @@ def test_emoji_in_hostname_is_rejected():
         _validate_fetch_url("https://exa\U0001f381mple.com/product")
 
 
-def test_redirect_hook_blocks_unsafe_ip_target():
-    request = httpx.Request("GET", "http://169.254.169.254/metadata")
+async def test_redirect_to_unsafe_ip_is_blocked():
+    validated: set[str] = set()
     with pytest.raises(ValueError, match="private"):
-        import asyncio
-        asyncio.get_event_loop().run_until_complete(_check_redirect_url_is_safe(request))
+        await _validate_fetch_url_and_resolved_host(
+            "http://169.254.169.254/metadata", validated
+        )
 
 
-def test_redirect_hook_blocks_localhost_target():
-    request = httpx.Request("GET", "http://localhost/admin")
+async def test_redirect_to_localhost_is_blocked():
+    validated: set[str] = set()
     with pytest.raises(ValueError, match="localhost"):
-        import asyncio
-        asyncio.get_event_loop().run_until_complete(_check_redirect_url_is_safe(request))
+        await _validate_fetch_url_and_resolved_host("http://localhost/admin", validated)
+
+
+async def test_dns_check_is_skipped_for_already_validated_hostname():
+    validated: set[str] = {"example.com"}
+    fake_results = [(None, None, None, None, ("93.184.216.34", 0))]
+    with patch("socket.getaddrinfo", return_value=fake_results) as mock_dns:
+        await _validate_fetch_url_and_resolved_host(
+            "https://example.com/other-page", validated
+        )
+    mock_dns.assert_not_called()
 
 
 async def test_hostname_resolving_to_private_ip_is_rejected():
