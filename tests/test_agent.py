@@ -2,6 +2,8 @@ import asyncio
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import anthropic
+import httpx
 import pytest
 
 from app.agent import run_research_agent
@@ -257,6 +259,21 @@ async def test_runtime_timeout_falls_back_to_insufficient_data(extraction, ident
 
     with patch("asyncio.wait_for", side_effect=raise_timeout):
         result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
+    assert isinstance(result, ResearchResult)
+
+
+async def test_anthropic_rate_limit_error_falls_back_to_insufficient_data(
+    mock_create, extraction, identity
+):
+    response = httpx.Response(
+        status_code=429,
+        request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"),
+    )
+    mock_create.side_effect = anthropic.RateLimitError(
+        "Rate limit exceeded", response=response, body=None
+    )
+    result = await run_research_agent("https://example.com/product", extraction, identity)
     assert result.verdict.value == "insufficient_data"
     assert isinstance(result, ResearchResult)
 
