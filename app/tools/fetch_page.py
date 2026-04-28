@@ -1,6 +1,10 @@
+import asyncio
+import ipaddress
 import json
 import logging
 import re
+import socket
+import unicodedata
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
@@ -409,8 +413,7 @@ _RENDER_EXTRACT_JS = r"""
 
 
 async def _render_page(url: str, timeout_ms: int) -> _RenderedResult:
-    # NOTE: ROK-32 (URL safety guardrails) is not yet implemented.
-    # Rendered extraction must not be used on arbitrary unsafe URLs in production.
+    _validate_fetch_url(url)
     try:
         from playwright.async_api import TimeoutError as PlaywrightTimeoutError
         from playwright.async_api import async_playwright
@@ -563,13 +566,107 @@ async def _static_extract(url: str, html: str) -> _StaticResult:
     )
 
 
+# --- URL safety ---
+
+def _ip_is_globally_safe(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return addr.is_global and not addr.is_multicast
+
+
+def _hostname_is_ip_literal(hostname: str) -> bool:
+    try:
+        ipaddress.ip_address(hostname)
+        return True
+    except ValueError:
+        return False
+
+
+def _validate_fetch_url(url: str) -> None:
+    for char in url:
+        if unicodedata.category(char) in ("Cc", "Cf") or char.isspace():
+            logger.warning("Blocked fetch: URL contains unsafe characters: %r", url)
+            raise ValueError("URL contains unsafe characters and cannot be fetched")
+
+    parsed = urlparse(url)
+
+    if parsed.scheme not in ("http", "https"):
+        logger.warning("Blocked fetch: disallowed scheme %r in URL %r", parsed.scheme, url)
+        raise ValueError(
+            f"Only http and https URLs are allowed, got scheme {parsed.scheme!r}"
+        )
+
+    hostname = parsed.hostname
+    if not hostname:
+        logger.warning("Blocked fetch: no valid hostname in URL %r", url)
+        raise ValueError("URL has no valid hostname")
+
+    try:
+        hostname.encode("ascii")
+    except UnicodeEncodeError:
+        logger.warning("Blocked fetch: non-ASCII hostname %r in URL %r", hostname, url)
+        raise ValueError("URL hostname contains non-ASCII characters and cannot be fetched")
+
+    if hostname == "localhost" or hostname.endswith(".localhost"):
+        logger.warning("Blocked fetch: localhost hostname in URL %r", url)
+        raise ValueError("Requests to localhost are not allowed")
+
+    if _hostname_is_ip_literal(hostname):
+        addr = ipaddress.ip_address(hostname)
+        if not _ip_is_globally_safe(addr):
+            logger.warning("Blocked fetch: unsafe IP address %r in URL %r", hostname, url)
+            raise ValueError(
+                "Requests to private, loopback, or reserved IP addresses are not allowed"
+            )
+
+
+async def _validate_resolved_addresses_are_safe(hostname: str) -> None:
+    loop = asyncio.get_running_loop()
+    try:
+        results = await loop.run_in_executor(
+            None, lambda: socket.getaddrinfo(hostname, None)
+        )
+    except OSError as exc:
+        logger.warning("Blocked fetch: could not resolve hostname %r: %s", hostname, exc)
+        raise ValueError(f"Could not resolve hostname {hostname!r}: {exc}") from exc
+
+    for result in results:
+        addr_str = result[4][0]
+        try:
+            addr = ipaddress.ip_address(addr_str)
+        except ValueError:
+            continue
+        if not _ip_is_globally_safe(addr):
+            logger.warning(
+                "Blocked fetch: hostname %r resolved to unsafe address %r",
+                hostname,
+                addr_str,
+            )
+            raise ValueError(
+                f"Hostname {hostname!r} resolves to a private or reserved address"
+            )
+
+
+async def _check_redirect_url_is_safe(request: httpx.Request) -> None:
+    url_str = str(request.url)
+    _validate_fetch_url(url_str)
+    parsed = urlparse(url_str)
+    hostname = parsed.hostname or ""
+    if not _hostname_is_ip_literal(hostname):
+        await _validate_resolved_addresses_are_safe(hostname)
+
+
 # --- Main ---
 
 async def fetch_page(url: str) -> FetchedPage:
+    _validate_fetch_url(url)
+    parsed_for_dns = urlparse(url)
+    hostname = parsed_for_dns.hostname or ""
+    if not _hostname_is_ip_literal(hostname):
+        await _validate_resolved_addresses_are_safe(hostname)
     try:
         async with httpx.AsyncClient(
             timeout=settings.request_timeout_seconds,
             follow_redirects=True,
+            event_hooks={"request": [_check_redirect_url_is_safe]},
         ) as client:
             response = await client.get(url)
             response.raise_for_status()

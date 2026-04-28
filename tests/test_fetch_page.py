@@ -1,3 +1,4 @@
+import socket
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -5,6 +6,7 @@ import pytest
 
 from app.tools.fetch_page import (
     FetchedPage,
+    _check_redirect_url_is_safe,
     _detect_condition_text,
     _detect_listing_count,
     _detect_lowest_price,
@@ -13,6 +15,8 @@ from app.tools.fetch_page import (
     _is_marketplace_like,
     _needs_rendered_fallback,
     _StaticResult,
+    _validate_fetch_url,
+    _validate_resolved_addresses_are_safe,
     fetch_page,
 )
 
@@ -106,6 +110,14 @@ def make_mock_response(html: str, content_type: str = "text/html; charset=utf-8"
     mock_response.raise_for_status = MagicMock()
     mock_response.status_code = 200
     return mock_response
+
+
+@pytest.fixture(autouse=True)
+def mock_dns_resolution():
+    """Prevent real DNS lookups in fetch_page tests. Override per-test for DNS-specific tests."""
+    fake_results = [(None, None, None, None, ("93.184.216.34", 0))]
+    with patch("socket.getaddrinfo", return_value=fake_results):
+        yield
 
 
 @pytest.fixture
@@ -639,3 +651,155 @@ async def test_render_failure_is_logged(mock_http_client, caplog):
     ):
         with pytest.raises(Exception):
             await fetch_page("https://example.com/product")
+
+
+# --- URL safety tests ---
+
+
+def test_valid_http_url_passes_validation():
+    _validate_fetch_url("http://example.com/product")
+
+
+def test_valid_https_url_passes_validation():
+    _validate_fetch_url("https://example.com/product")
+
+
+def test_ftp_scheme_is_rejected():
+    with pytest.raises(ValueError, match="http and https"):
+        _validate_fetch_url("ftp://example.com/file")
+
+
+def test_file_scheme_is_rejected():
+    with pytest.raises(ValueError, match="http and https"):
+        _validate_fetch_url("file:///etc/passwd")
+
+
+def test_data_scheme_is_rejected():
+    with pytest.raises(ValueError, match="http and https"):
+        _validate_fetch_url("data:text/html,<script>alert(1)</script>")
+
+
+def test_localhost_hostname_is_rejected():
+    with pytest.raises(ValueError, match="localhost"):
+        _validate_fetch_url("http://localhost/admin")
+
+
+def test_localhost_with_port_is_rejected():
+    with pytest.raises(ValueError, match="localhost"):
+        _validate_fetch_url("http://localhost:8080/admin")
+
+
+def test_loopback_ip_127_is_rejected():
+    with pytest.raises(ValueError, match="private"):
+        _validate_fetch_url("http://127.0.0.1/admin")
+
+
+def test_unspecified_ip_0_0_0_0_is_rejected():
+    with pytest.raises(ValueError, match="private"):
+        _validate_fetch_url("http://0.0.0.0/")
+
+
+def test_private_ip_10_block_is_rejected():
+    with pytest.raises(ValueError, match="private"):
+        _validate_fetch_url("http://10.0.0.1/internal")
+
+
+def test_private_ip_172_16_block_is_rejected():
+    with pytest.raises(ValueError, match="private"):
+        _validate_fetch_url("http://172.16.0.1/internal")
+
+
+def test_private_ip_192_168_block_is_rejected():
+    with pytest.raises(ValueError, match="private"):
+        _validate_fetch_url("http://192.168.1.1/internal")
+
+
+def test_link_local_169_254_is_rejected():
+    with pytest.raises(ValueError, match="private"):
+        _validate_fetch_url("http://169.254.0.1/")
+
+
+def test_cloud_metadata_ip_is_rejected():
+    with pytest.raises(ValueError, match="private"):
+        _validate_fetch_url("http://169.254.169.254/latest/meta-data/")
+
+
+def test_ipv6_loopback_is_rejected():
+    with pytest.raises(ValueError, match="private"):
+        _validate_fetch_url("http://[::1]/")
+
+
+def test_ipv6_link_local_is_rejected():
+    with pytest.raises(ValueError, match="private"):
+        _validate_fetch_url("http://[fe80::1]/")
+
+
+def test_null_byte_in_url_is_rejected():
+    with pytest.raises(ValueError, match="unsafe characters"):
+        _validate_fetch_url("http://example.com/\x00path")
+
+
+def test_newline_in_url_is_rejected():
+    with pytest.raises(ValueError, match="unsafe characters"):
+        _validate_fetch_url("http://example.com/path\ninjection")
+
+
+def test_embedded_space_in_url_is_rejected():
+    with pytest.raises(ValueError, match="unsafe characters"):
+        _validate_fetch_url("https://example.com/prod uct")
+
+
+def test_percent_encoded_space_in_url_is_allowed():
+    _validate_fetch_url("https://example.com/product%20name")
+
+
+def test_unicode_format_char_in_url_is_rejected():
+    with pytest.raises(ValueError, match="unsafe characters"):
+        _validate_fetch_url("http://example.com/path​")
+
+
+def test_emoji_in_hostname_is_rejected():
+    with pytest.raises(ValueError, match="non-ASCII"):
+        _validate_fetch_url("https://exa\U0001f381mple.com/product")
+
+
+def test_redirect_hook_blocks_unsafe_ip_target():
+    request = httpx.Request("GET", "http://169.254.169.254/metadata")
+    with pytest.raises(ValueError, match="private"):
+        import asyncio
+        asyncio.get_event_loop().run_until_complete(_check_redirect_url_is_safe(request))
+
+
+def test_redirect_hook_blocks_localhost_target():
+    request = httpx.Request("GET", "http://localhost/admin")
+    with pytest.raises(ValueError, match="localhost"):
+        import asyncio
+        asyncio.get_event_loop().run_until_complete(_check_redirect_url_is_safe(request))
+
+
+async def test_hostname_resolving_to_private_ip_is_rejected():
+    fake_results = [(None, None, None, None, ("192.168.1.100", 0))]
+    with patch("socket.getaddrinfo", return_value=fake_results):
+        with pytest.raises(ValueError, match="private"):
+            await _validate_resolved_addresses_are_safe("internal.corp")
+
+
+async def test_hostname_resolving_to_public_ip_passes():
+    fake_results = [(None, None, None, None, ("93.184.216.34", 0))]
+    with patch("socket.getaddrinfo", return_value=fake_results):
+        await _validate_resolved_addresses_are_safe("example.com")
+
+
+async def test_fetch_page_rejects_private_ip_before_any_request():
+    with pytest.raises(ValueError, match="private"):
+        await fetch_page("http://192.168.1.1/product")
+
+
+async def test_fetch_page_rejects_localhost_before_any_request():
+    with pytest.raises(ValueError, match="localhost"):
+        await fetch_page("http://localhost/admin")
+
+
+async def test_fetch_page_rejects_disallowed_scheme_before_any_request():
+    with pytest.raises(ValueError, match="http and https"):
+        await fetch_page("ftp://example.com/file")
