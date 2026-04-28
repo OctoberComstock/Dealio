@@ -10,11 +10,11 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
     anthropic_model: str = ""
-    agent_timeout_seconds: int = 45
+    agent_timeout_seconds: int = 60
 
     max_searches: int = 5
     max_fetched_pages: int = 8
-    request_timeout_seconds: int = 45
+    request_timeout_seconds: int = 60
 
     search_cache_ttl_seconds: int = 900
     page_cache_ttl_seconds: int = 900
