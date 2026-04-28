@@ -156,6 +156,39 @@ def _filter_evidence_to_observed(
     return valid
 
 
+def _sanitize_alternative(
+    alternative: dict | None, seen_urls: set[str]
+) -> dict | None:
+    if alternative is None:
+        return None
+
+    if not isinstance(alternative, dict):
+        logger.warning(
+            "Alternative dropped: expected dict but got %s", type(alternative).__name__
+        )
+        return None
+
+    for field in ("product_name", "price", "reason", "source_url"):
+        if not str(alternative.get(field) or "").strip():
+            logger.warning("Alternative dropped: missing or blank field %r", field)
+            return None
+
+    alt_url = str(alternative["source_url"]).strip()
+    if not _url_was_observed(alt_url, seen_urls):
+        logger.warning(
+            "Alternative dropped: source_url %r was not observed in tool results", alt_url
+        )
+        return None
+
+    if not alternative.get("is_cheaper") and not alternative.get("is_better_reviewed"):
+        logger.warning(
+            "Alternative dropped: neither is_cheaper nor is_better_reviewed is true"
+        )
+        return None
+
+    return alternative
+
+
 def _validate_verdict_rules(verdict_input: dict, seen_urls: set[str]) -> None:
     verdict = verdict_input.get("verdict", "")
     evidence = verdict_input.get("evidence", [])
@@ -174,18 +207,6 @@ def _validate_verdict_rules(verdict_input: dict, seen_urls: set[str]) -> None:
         if len(distinct_urls) < 2:
             raise ValueError(
                 "High confidence requires at least 2 distinct evidence source URLs."
-            )
-
-    alternative = verdict_input.get("alternative")
-    if alternative:
-        alt_url = str(alternative.get("source_url") or "")
-        if alt_url and not _url_was_observed(alt_url, seen_urls):
-            raise ValueError(
-                f"Alternative source_url was not observed in tool results: {alt_url}"
-            )
-        if not alternative.get("is_cheaper") and not alternative.get("is_better_reviewed"):
-            raise ValueError(
-                "Alternative must have is_cheaper=True or is_better_reviewed=True."
             )
 
 
@@ -222,7 +243,12 @@ def _build_research_result(
     try:
         evidence_truncated = verdict_input.get("evidence", [])[:5]
         valid_evidence = _filter_evidence_to_observed(evidence_truncated, seen_urls)
-        filtered_verdict = {**verdict_input, "evidence": valid_evidence}
+        valid_alternative = _sanitize_alternative(verdict_input.get("alternative"), seen_urls)
+        filtered_verdict = {
+            **verdict_input,
+            "evidence": valid_evidence,
+            "alternative": valid_alternative,
+        }
         _validate_verdict_rules(filtered_verdict, seen_urls)
         return ResearchResult(
             product_name=filtered_verdict["product_name"],

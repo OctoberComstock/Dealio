@@ -388,7 +388,7 @@ async def test_unobserved_evidence_url_falls_back_to_insufficient_data(
     assert result.verdict.value == "insufficient_data"
 
 
-async def test_invalid_alternative_falls_back_to_insufficient_data(
+async def test_alternative_with_unsupported_flags_keeps_verdict_with_no_alternative(
     mock_create, extraction, identity
 ):
     verdict = {
@@ -404,7 +404,8 @@ async def test_invalid_alternative_falls_back_to_insufficient_data(
     }
     mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
     result = await run_research_agent("https://example.com/product", extraction, identity)
-    assert result.verdict.value == "insufficient_data"
+    assert result.verdict.value == "good_deal"
+    assert result.alternative is None
 
 
 async def test_fallback_does_not_preserve_misleading_summary(
@@ -454,7 +455,7 @@ async def test_high_confidence_two_distinct_observed_sources_passes(
     assert result.confidence.value == "high"
 
 
-async def test_alternative_url_not_observed_falls_back_to_insufficient_data(
+async def test_alternative_with_unobserved_url_keeps_verdict_with_no_alternative(
     mock_create, extraction, identity
 ):
     verdict = {
@@ -470,7 +471,8 @@ async def test_alternative_url_not_observed_falls_back_to_insufficient_data(
     }
     mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
     result = await run_research_agent("https://example.com/product", extraction, identity)
-    assert result.verdict.value == "insufficient_data"
+    assert result.verdict.value == "good_deal"
+    assert result.alternative is None
 
 
 async def test_url_validation_accepts_normalized_variant(mock_create, extraction, identity):
@@ -638,6 +640,94 @@ async def test_validation_logs_dropped_evidence_url(
     messages = [r.message for r in caplog.records]
     assert any("fabricated.example.com" in m for m in messages)
     assert any("observed" in m.lower() for m in messages)
+
+
+# --- Alternative sanitization tests ---
+
+
+def _make_valid_alternative(source_url: str = "https://example.com/product") -> dict:
+    return {
+        "product_name": "Widget Pro",
+        "price": "$25.00",
+        "reason": "Cheaper option",
+        "source_url": source_url,
+        "is_cheaper": True,
+        "is_better_reviewed": False,
+    }
+
+
+async def test_valid_verdict_with_complete_alternative_keeps_alternative(
+    mock_create, extraction, identity
+):
+    verdict = {**VALID_VERDICT, "alternative": _make_valid_alternative()}
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert result.alternative is not None
+    assert result.alternative.price == "$25.00"
+
+
+async def test_alternative_missing_price_keeps_verdict_with_no_alternative(
+    mock_create, extraction, identity
+):
+    alt = _make_valid_alternative()
+    del alt["price"]
+    verdict = {**VALID_VERDICT, "alternative": alt}
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert result.alternative is None
+
+
+async def test_alternative_missing_product_name_keeps_verdict_with_no_alternative(
+    mock_create, extraction, identity
+):
+    alt = _make_valid_alternative()
+    del alt["product_name"]
+    verdict = {**VALID_VERDICT, "alternative": alt}
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert result.alternative is None
+
+
+async def test_alternative_missing_source_url_keeps_verdict_with_no_alternative(
+    mock_create, extraction, identity
+):
+    alt = _make_valid_alternative()
+    del alt["source_url"]
+    verdict = {**VALID_VERDICT, "alternative": alt}
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert result.alternative is None
+
+
+async def test_alternative_missing_reason_keeps_verdict_with_no_alternative(
+    mock_create, extraction, identity
+):
+    alt = _make_valid_alternative()
+    del alt["reason"]
+    verdict = {**VALID_VERDICT, "alternative": alt}
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "good_deal"
+    assert result.alternative is None
+
+
+async def test_invalid_evidence_still_falls_back_despite_valid_alternative(
+    mock_create, extraction, identity
+):
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Only one.", "source_url": "https://example.com/product"}
+        ],
+        "alternative": _make_valid_alternative(),
+    }
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict))
+    result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert result.verdict.value == "insufficient_data"
 
 
 # --- System prompt tests ---

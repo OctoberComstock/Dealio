@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas import (
+    BetterAlternative,
     Confidence,
     EvidenceItem,
     ResearchResult,
@@ -83,3 +84,14 @@ def test_alternative_populates_correctly():
 def test_evidence_source_url_must_be_valid():
     with pytest.raises(ValidationError):
         EvidenceItem(text="Some evidence", source_url="not-a-url")
+
+
+def test_alternative_price_is_required():
+    with pytest.raises(ValidationError):
+        BetterAlternative(
+            product_name="Widget Pro",
+            reason="Cheaper option",
+            source_url="https://example.com/alt",
+            is_cheaper=True,
+            is_better_reviewed=False,
+        )
