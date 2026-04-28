@@ -59,13 +59,30 @@ def _format_search_results(results) -> str:
 
 
 def _format_fetched_page(page) -> str:
-    content_preview = (page.content or "")[:1000]
-    return "\n".join([
+    lines = [
         f"Title: {page.title or 'N/A'}",
         f"URL: {page.url}",
         f"Price: {page.price_guess or 'N/A'}",
-        f"Content:\n{content_preview}",
-    ])
+    ]
+    if getattr(page, "lowest_visible_price", None):
+        lines.append(f"Lowest visible: {page.lowest_visible_price}")
+    candidates = getattr(page, "price_candidates", [])
+    labels = getattr(page, "price_candidate_labels", [])
+    if candidates:
+        parts = []
+        for i, p in enumerate(candidates[:5]):
+            lbl = labels[i] if i < len(labels) else ""
+            parts.append(f"{lbl}: {p}" if lbl else p)
+        lines.append(f"Price candidates: {', '.join(parts)}")
+    if getattr(page, "shipping_text", None):
+        lines.append(f"Shipping: {page.shipping_text}")
+    if getattr(page, "listing_count", None):
+        lines.append(f"Listings: {page.listing_count}")
+    if getattr(page, "condition_text", None):
+        lines.append(f"Condition: {page.condition_text}")
+    content_preview = (page.content or "")[:1000]
+    lines.append(f"Content:\n{content_preview}")
+    return "\n".join(lines)
 
 
 async def _execute_tool(

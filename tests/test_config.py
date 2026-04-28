@@ -27,3 +27,9 @@ def test_agent_timeout_overridable_via_env(monkeypatch):
     monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "30")
     settings = Settings()
     assert settings.agent_timeout_seconds == 30
+
+
+def test_render_page_timeout_overridable_via_env(monkeypatch):
+    monkeypatch.setenv("RENDER_PAGE_TIMEOUT_SECONDS", "20")
+    settings = Settings()
+    assert settings.render_page_timeout_seconds == 20
