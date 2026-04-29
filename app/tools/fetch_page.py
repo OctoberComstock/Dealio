@@ -427,6 +427,26 @@ _RENDER_EXTRACT_JS = r"""
     }
 """
 
+_ABORTED_RESOURCE_TYPES = frozenset({"image", "media", "font", "ping"})
+
+
+async def _handle_playwright_route(route, request, validated_hostnames: set[str]) -> None:
+    logger.debug("Playwright route: resource_type=%r url=%r", request.resource_type, request.url)
+    if request.resource_type in _ABORTED_RESOURCE_TYPES:
+        await route.abort()
+        return
+    try:
+        await _validate_fetch_url_and_resolved_host(request.url, validated_hostnames)
+    except ValueError as exc:
+        logger.warning(
+            "Blocked rendered fetch request to unsafe URL %r: %s",
+            request.url,
+            exc,
+        )
+        await route.abort()
+        return
+    await route.continue_()
+
 
 async def _render_page(url: str, timeout_ms: int, validated_hostnames: set[str] | None = None) -> _RenderedResult:
     await _validate_fetch_url_and_resolved_host(url, validated_hostnames if validated_hostnames is not None else set())
@@ -444,20 +464,11 @@ async def _render_page(url: str, timeout_ms: int, validated_hostnames: set[str] 
                 page = await browser.new_page()
 
                 async def _route_safely(route, request) -> None:
-                    try:
-                        await _validate_fetch_url_and_resolved_host(
-                            request.url,
-                            validated_hostnames if validated_hostnames is not None else set(),
-                        )
-                    except ValueError as exc:
-                        logger.warning(
-                            "Blocked rendered fetch request to unsafe URL %r: %s",
-                            request.url,
-                            exc,
-                        )
-                        await route.abort()
-                        return
-                    await route.continue_()
+                    await _handle_playwright_route(
+                        route,
+                        request,
+                        validated_hostnames if validated_hostnames is not None else set(),
+                    )
 
                 await page.route("**/*", _route_safely)
                 await page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
