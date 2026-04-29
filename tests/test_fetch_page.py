@@ -6,11 +6,13 @@ import pytest
 
 from app.tools.fetch_page import (
     FetchedPage,
+    _ABORTED_RESOURCE_TYPES,
     _detect_condition_text,
     _detect_listing_count,
     _detect_lowest_price,
     _detect_shipping_text,
     _find_price,
+    _handle_playwright_route,
     _is_marketplace_like,
     _needs_rendered_fallback,
     _StaticResult,
@@ -813,3 +815,41 @@ async def test_fetch_page_rejects_localhost_before_any_request():
 async def test_fetch_page_rejects_disallowed_scheme_before_any_request():
     with pytest.raises(ValueError, match="http and https"):
         await fetch_page("ftp://example.com/file")
+
+
+# --- Playwright route safety ---
+
+async def test_playwright_route_aborts_image_without_dns_check():
+    route = AsyncMock()
+    request = MagicMock()
+    request.resource_type = "image"
+    request.url = "https://cdn.example.com/photo.jpg"
+    validated: set[str] = set()
+
+    with patch(
+        "app.tools.fetch_page._validate_fetch_url_and_resolved_host",
+        new_callable=AsyncMock,
+    ) as mock_validate:
+        await _handle_playwright_route(route, request, validated)
+
+    route.abort.assert_awaited_once()
+    route.continue_.assert_not_awaited()
+    mock_validate.assert_not_awaited()
+
+
+async def test_playwright_route_validates_and_continues_document_request():
+    route = AsyncMock()
+    request = MagicMock()
+    request.resource_type = "document"
+    request.url = "https://example.com/page"
+    validated: set[str] = set()
+
+    with patch(
+        "app.tools.fetch_page._validate_fetch_url_and_resolved_host",
+        new_callable=AsyncMock,
+    ) as mock_validate:
+        await _handle_playwright_route(route, request, validated)
+
+    mock_validate.assert_awaited_once_with("https://example.com/page", validated)
+    route.continue_.assert_awaited_once()
+    route.abort.assert_not_awaited()
