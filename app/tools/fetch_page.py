@@ -430,6 +430,16 @@ _RENDER_EXTRACT_JS = r"""
 
 _ABORTED_RESOURCE_TYPES = frozenset({"image", "media", "font", "ping"})
 
+# CSS selector matching the same price signals targeted by _RENDER_EXTRACT_JS.
+# Used as a readiness signal: once any price element appears in the DOM, the
+# page has rendered enough for extraction. Falls back to a timeout if none appear.
+_PRICE_READY_SELECTOR = (
+    '[itemprop="price"],[itemprop="lowPrice"],[data-price],'
+    '[data-testid*="price" i],[class*="price" i],[id*="price" i]'
+)
+
+_PRICE_READY_TIMEOUT_MS = 1500
+
 
 async def _handle_playwright_route(
     route,
@@ -481,9 +491,8 @@ async def _render_page(
 
                 await page.route("**/*", _route_safely)
                 await page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
-                idle_budget = min(timeout_ms // 4, 8000)
                 try:
-                    await page.wait_for_load_state("networkidle", timeout=idle_budget)
+                    await page.wait_for_selector(_PRICE_READY_SELECTOR, timeout=_PRICE_READY_TIMEOUT_MS)
                 except PlaywrightTimeoutError:
                     pass
                 title = (await page.title()) or None
