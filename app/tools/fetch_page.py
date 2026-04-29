@@ -427,10 +427,11 @@ _RENDER_EXTRACT_JS = r"""
     }
 """
 
-_ABORTED_RESOURCE_TYPES = frozenset({"image", "media", "font"})
+_ABORTED_RESOURCE_TYPES = frozenset({"image", "media", "font", "ping"})
 
 
 async def _handle_playwright_route(route, request, validated_hostnames: set[str]) -> None:
+    logger.debug("Playwright route: resource_type=%r url=%r", request.resource_type, request.url)
     if request.resource_type in _ABORTED_RESOURCE_TYPES:
         await route.abort()
         return
