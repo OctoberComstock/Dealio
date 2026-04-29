@@ -858,6 +858,24 @@ async def test_playwright_route_validates_and_continues_document_request():
     route.abort.assert_not_awaited()
 
 
+async def test_failed_dns_validation_does_not_mark_hostname_as_validated():
+    validated: set[str] = set()
+    tasks: dict[str, asyncio.Task] = {}
+    private_ip_result = [(None, None, None, None, ("192.168.1.1", 0))]
+
+    with patch("socket.getaddrinfo", return_value=private_ip_result):
+        with pytest.raises(ValueError, match="private"):
+            await _validate_fetch_url_and_resolved_host("https://internal.corp/page", validated, tasks)
+
+    assert "internal.corp" not in validated
+    assert "internal.corp" not in tasks
+
+    # a subsequent call retries rather than silently treating the hostname as safe
+    with patch("socket.getaddrinfo", return_value=private_ip_result):
+        with pytest.raises(ValueError, match="private"):
+            await _validate_fetch_url_and_resolved_host("https://internal.corp/page2", validated, tasks)
+
+
 async def test_concurrent_validation_of_same_hostname_shares_one_dns_task():
     validated: set[str] = set()
     tasks: dict[str, asyncio.Task] = {}
