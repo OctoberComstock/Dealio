@@ -350,6 +350,7 @@ def _summarize_shopify_product(product: dict, price_fn) -> str:
 async def _fetch_shopify_product(
     url: str,
     validated_hostnames: set[str],
+    dns_validation_tasks: dict[str, asyncio.Task[None]],
 ) -> tuple[dict, str] | None:
     info = _shopify_handle(url)
     if not info:
@@ -359,11 +360,11 @@ async def _fetch_shopify_product(
     json_url = f"{base}/products/{handle}.json"
 
     async def _shopify_request_hook(request: httpx.Request) -> None:
-        await _validate_fetch_url_and_resolved_host(str(request.url), validated_hostnames)
+        await _validate_fetch_url_and_resolved_host(str(request.url), validated_hostnames, dns_validation_tasks)
 
     try:
-        await _validate_fetch_url_and_resolved_host(js_url, validated_hostnames)
-        await _validate_fetch_url_and_resolved_host(json_url, validated_hostnames)
+        await _validate_fetch_url_and_resolved_host(js_url, validated_hostnames, dns_validation_tasks)
+        await _validate_fetch_url_and_resolved_host(json_url, validated_hostnames, dns_validation_tasks)
         async with httpx.AsyncClient(
             timeout=10.0,
             follow_redirects=True,
@@ -430,13 +431,18 @@ _RENDER_EXTRACT_JS = r"""
 _ABORTED_RESOURCE_TYPES = frozenset({"image", "media", "font", "ping"})
 
 
-async def _handle_playwright_route(route, request, validated_hostnames: set[str]) -> None:
+async def _handle_playwright_route(
+    route,
+    request,
+    validated_hostnames: set[str],
+    dns_validation_tasks: dict[str, asyncio.Task[None]],
+) -> None:
     logger.debug("Playwright route: resource_type=%r url=%r", request.resource_type, request.url)
     if request.resource_type in _ABORTED_RESOURCE_TYPES:
         await route.abort()
         return
     try:
-        await _validate_fetch_url_and_resolved_host(request.url, validated_hostnames)
+        await _validate_fetch_url_and_resolved_host(request.url, validated_hostnames, dns_validation_tasks)
     except ValueError as exc:
         logger.warning(
             "Blocked rendered fetch request to unsafe URL %r: %s",
@@ -448,8 +454,15 @@ async def _handle_playwright_route(route, request, validated_hostnames: set[str]
     await route.continue_()
 
 
-async def _render_page(url: str, timeout_ms: int, validated_hostnames: set[str] | None = None) -> _RenderedResult:
-    await _validate_fetch_url_and_resolved_host(url, validated_hostnames if validated_hostnames is not None else set())
+async def _render_page(
+    url: str,
+    timeout_ms: int,
+    validated_hostnames: set[str] | None = None,
+    dns_validation_tasks: dict[str, asyncio.Task[None]] | None = None,
+) -> _RenderedResult:
+    _hostnames = validated_hostnames if validated_hostnames is not None else set()
+    _tasks = dns_validation_tasks if dns_validation_tasks is not None else {}
+    await _validate_fetch_url_and_resolved_host(url, _hostnames, _tasks)
     try:
         from playwright.async_api import TimeoutError as PlaywrightTimeoutError
         from playwright.async_api import async_playwright
@@ -464,11 +477,7 @@ async def _render_page(url: str, timeout_ms: int, validated_hostnames: set[str] 
                 page = await browser.new_page()
 
                 async def _route_safely(route, request) -> None:
-                    await _handle_playwright_route(
-                        route,
-                        request,
-                        validated_hostnames if validated_hostnames is not None else set(),
-                    )
+                    await _handle_playwright_route(route, request, _hostnames, _tasks)
 
                 await page.route("**/*", _route_safely)
                 await page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
@@ -537,6 +546,7 @@ async def _static_extract(
     url: str,
     html: str,
     validated_hostnames: set[str],
+    dns_validation_tasks: dict[str, asyncio.Task[None]],
 ) -> _StaticResult:
 
     # 1. JSON-LD
@@ -553,7 +563,7 @@ async def _static_extract(
             )
 
     # 2. Shopify product API
-    shopify = await _fetch_shopify_product(url, validated_hostnames)
+    shopify = await _fetch_shopify_product(url, validated_hostnames, dns_validation_tasks)
     if shopify:
         shopify_product, fmt = shopify
         price_fn = _price_from_shopify_js if fmt == "js" else _price_from_shopify_json
@@ -710,6 +720,7 @@ async def _validate_resolved_addresses_are_safe(hostname: str) -> None:
 async def _validate_fetch_url_and_resolved_host(
     url: str,
     validated_hostnames: set[str],
+    dns_validation_tasks: dict[str, asyncio.Task[None]],
 ) -> None:
     _validate_fetch_url(url)
     parsed = urlparse(url)
@@ -718,7 +729,16 @@ async def _validate_fetch_url_and_resolved_host(
         return
     if hostname in validated_hostnames:
         return
-    await _validate_resolved_addresses_are_safe(hostname)
+    if hostname in dns_validation_tasks:
+        await dns_validation_tasks[hostname]
+        return
+    task = asyncio.create_task(_validate_resolved_addresses_are_safe(hostname))
+    dns_validation_tasks[hostname] = task
+    try:
+        await task
+    except Exception:
+        dns_validation_tasks.pop(hostname, None)
+        raise
     validated_hostnames.add(hostname)
 
 
@@ -726,10 +746,11 @@ async def _validate_fetch_url_and_resolved_host(
 
 async def fetch_page(url: str) -> FetchedPage:
     validated_hostnames: set[str] = set()
+    dns_validation_tasks: dict[str, asyncio.Task[None]] = {}
 
     t_safety = time.perf_counter()
     logger.debug("fetch_page: URL safety validation starting for %r", url)
-    await _validate_fetch_url_and_resolved_host(url, validated_hostnames)
+    await _validate_fetch_url_and_resolved_host(url, validated_hostnames, dns_validation_tasks)
     logger.debug(
         "fetch_page: URL safety validation completed in %.3fs for %r",
         time.perf_counter() - t_safety,
@@ -737,7 +758,7 @@ async def fetch_page(url: str) -> FetchedPage:
     )
 
     async def _redirect_hook(request: httpx.Request) -> None:
-        await _validate_fetch_url_and_resolved_host(str(request.url), validated_hostnames)
+        await _validate_fetch_url_and_resolved_host(str(request.url), validated_hostnames, dns_validation_tasks)
 
     t_http = time.perf_counter()
     logger.debug("fetch_page: httpx fetch starting for %r", url)
@@ -764,7 +785,7 @@ async def fetch_page(url: str) -> FetchedPage:
         raise ValueError(f"Unsupported content type '{content_type}' for {url}")
 
     html = response.text
-    static = await _static_extract(url, html, validated_hostnames)
+    static = await _static_extract(url, html, validated_hostnames, dns_validation_tasks)
 
     url_out = static.canonical_url
     title = static.title
@@ -781,7 +802,7 @@ async def fetch_page(url: str) -> FetchedPage:
     if _needs_rendered_fallback(static, html, url):
         logger.debug("fetch_page: rendered extraction starting for %r", url)
         t_render = time.perf_counter()
-        rendered = await _render_page(url, settings.render_page_timeout_seconds * 1000, validated_hostnames)
+        rendered = await _render_page(url, settings.render_page_timeout_seconds * 1000, validated_hostnames, dns_validation_tasks)
         logger.debug(
             "fetch_page: rendered extraction completed in %.3fs for %r",
             time.perf_counter() - t_render,
