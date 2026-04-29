@@ -21,6 +21,7 @@ from app.tools.fetch_page import (
     _validate_resolved_addresses_are_safe,
     fetch_page,
 )
+import asyncio
 
 # --- HTML fixtures ---
 
@@ -769,14 +770,14 @@ async def test_redirect_to_unsafe_ip_is_blocked():
     validated: set[str] = set()
     with pytest.raises(ValueError, match="private"):
         await _validate_fetch_url_and_resolved_host(
-            "http://169.254.169.254/metadata", validated
+            "http://169.254.169.254/metadata", validated, {}
         )
 
 
 async def test_redirect_to_localhost_is_blocked():
     validated: set[str] = set()
     with pytest.raises(ValueError, match="localhost"):
-        await _validate_fetch_url_and_resolved_host("http://localhost/admin", validated)
+        await _validate_fetch_url_and_resolved_host("http://localhost/admin", validated, {})
 
 
 async def test_dns_check_is_skipped_for_already_validated_hostname():
@@ -784,7 +785,7 @@ async def test_dns_check_is_skipped_for_already_validated_hostname():
     fake_results = [(None, None, None, None, ("93.184.216.34", 0))]
     with patch("socket.getaddrinfo", return_value=fake_results) as mock_dns:
         await _validate_fetch_url_and_resolved_host(
-            "https://example.com/other-page", validated
+            "https://example.com/other-page", validated, {}
         )
     mock_dns.assert_not_called()
 
@@ -825,12 +826,13 @@ async def test_playwright_route_aborts_image_without_dns_check():
     request.resource_type = "image"
     request.url = "https://cdn.example.com/photo.jpg"
     validated: set[str] = set()
+    tasks: dict[str, asyncio.Task] = {}
 
     with patch(
         "app.tools.fetch_page._validate_fetch_url_and_resolved_host",
         new_callable=AsyncMock,
     ) as mock_validate:
-        await _handle_playwright_route(route, request, validated)
+        await _handle_playwright_route(route, request, validated, tasks)
 
     route.abort.assert_awaited_once()
     route.continue_.assert_not_awaited()
@@ -843,13 +845,30 @@ async def test_playwright_route_validates_and_continues_document_request():
     request.resource_type = "document"
     request.url = "https://example.com/page"
     validated: set[str] = set()
+    tasks: dict[str, asyncio.Task] = {}
 
     with patch(
         "app.tools.fetch_page._validate_fetch_url_and_resolved_host",
         new_callable=AsyncMock,
     ) as mock_validate:
-        await _handle_playwright_route(route, request, validated)
+        await _handle_playwright_route(route, request, validated, tasks)
 
-    mock_validate.assert_awaited_once_with("https://example.com/page", validated)
+    mock_validate.assert_awaited_once_with("https://example.com/page", validated, tasks)
     route.continue_.assert_awaited_once()
     route.abort.assert_not_awaited()
+
+
+async def test_concurrent_validation_of_same_hostname_shares_one_dns_task():
+    validated: set[str] = set()
+    tasks: dict[str, asyncio.Task] = {}
+    fake_results = [(None, None, None, None, ("93.184.216.34", 0))]
+
+    with patch("socket.getaddrinfo", return_value=fake_results) as mock_dns:
+        await asyncio.gather(
+            _validate_fetch_url_and_resolved_host("https://example.com/p1", validated, tasks),
+            _validate_fetch_url_and_resolved_host("https://example.com/p2", validated, tasks),
+            _validate_fetch_url_and_resolved_host("https://example.com/p3", validated, tasks),
+        )
+
+    mock_dns.assert_called_once()
+    assert "example.com" in validated
