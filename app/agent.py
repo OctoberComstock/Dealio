@@ -12,7 +12,7 @@ from app.prompts import SYSTEM_PROMPT, TOOLS, build_initial_prompt
 from app.schemas import ResearchResult
 from app.tools.extract_product import ProductPageExtraction
 from app.tools.fetch_page import FetchedPage, fetch_page
-from app.tools.normalize_url import normalize_url
+from app.tools.normalize_url import fetch_page_cache_key, normalize_url
 from app.tools.product_identity import ProductIdentity
 from app.tools.search_web import search_web
 
@@ -126,11 +126,9 @@ async def _execute_tool(
             return "Tool error: 'url' is required for fetch_page."
 
         if initial_fetched_page is not None:
-            try:
-                normalized_requested = normalize_url(url)
-            except ValueError:
-                normalized_requested = url
-            if normalized_requested == normalized_submitted_url:
+            requested_cache_key = fetch_page_cache_key(url)
+            submitted_cache_key = fetch_page_cache_key(normalized_submitted_url)
+            if requested_cache_key == submitted_cache_key:
                 logger.info("fetch_page cache hit for initial submitted URL: url=%r", url)
                 _observe_url(url, seen_urls)
                 _observe_url(initial_fetched_page.url, seen_urls)

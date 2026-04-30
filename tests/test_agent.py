@@ -252,6 +252,36 @@ async def test_fetch_page_cache_hit_with_tracking_param_variant_matches(
     mock_fetch.assert_not_called()
 
 
+async def test_fetch_page_cache_hit_for_amazon_url_with_extra_tracking_params(
+    mock_create, extraction, identity
+):
+    # Submitted URL has Amazon session/detail-page params; agent requests the same
+    # ASIN with only ?th=1. Both should resolve to the same cache key.
+    cached_page = FetchedPage(
+        url="https://www.amazon.com/Product-Name/dp/B08W2HG4WP?th=1",
+        title="Haruharu Cleanser",
+        content="Product content.",
+        price_guess="$18.99",
+    )
+    submitted_url = (
+        "https://www.amazon.com/Product-Name/dp/B08W2HG4WP"
+        "?_encoding=UTF8&pd_rd_r=abc&pd_rd_w=def&pf_rd_p=ghi&pf_rd_r=jkl"
+    )
+    agent_requested_url = "https://www.amazon.com/Haruharu/dp/B08W2HG4WP?th=1"
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block("fetch_page", {"url": agent_requested_url}, "b1")
+        ),
+        make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        await run_research_agent(
+            submitted_url, extraction, identity,
+            initial_fetched_page=cached_page,
+        )
+    mock_fetch.assert_not_called()
+
+
 async def test_fetch_page_cache_miss_for_different_url_executes_normally(
     mock_create, extraction, identity
 ):
