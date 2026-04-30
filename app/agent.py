@@ -132,6 +132,7 @@ async def _execute_tool(
                 normalized_requested = url
             if normalized_requested == normalized_submitted_url:
                 logger.info("fetch_page cache hit for initial submitted URL: url=%r", url)
+                _observe_url(url, seen_urls)
                 _observe_url(initial_fetched_page.url, seen_urls)
                 return _format_fetched_page(initial_fetched_page)
 

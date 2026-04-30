@@ -329,6 +329,38 @@ async def test_fetch_page_with_no_initial_page_executes_normally(mock_create, ex
     mock_fetch.assert_called_once_with("https://example.com/product")
 
 
+async def test_fetch_page_cache_hit_observes_both_requested_and_cached_url(
+    mock_create, extraction, identity
+):
+    cached_page = FetchedPage(
+        url="https://example.com/product",
+        title="Great Widget",
+        content="Product content.",
+        price_guess="$29.99",
+    )
+    # Agent requests the URL with a tracking param, then cites the bare requested URL in evidence.
+    requested_url = "https://example.com/product?utm_source=google"
+    verdict = {
+        **VALID_VERDICT,
+        "evidence": [
+            {"text": "Price confirmed.", "source_url": requested_url},
+            {"text": "Market check.", "source_url": "https://example.com/product"},
+            {"text": "Review found.", "source_url": "https://example.com/product"},
+        ],
+    }
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": requested_url}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock):
+        result = await run_research_agent(
+            "https://example.com/product", extraction, identity,
+            initial_fetched_page=cached_page,
+        )
+    assert result.verdict.value == "good_deal"
+    assert any(str(e.source_url) == requested_url for e in result.evidence)
+
+
 async def test_tool_errors_are_returned_as_tool_results(mock_create, extraction, identity):
     mock_create.side_effect = [
         make_response(make_tool_block("search_web", {"query": "widget"}, "b1")),
