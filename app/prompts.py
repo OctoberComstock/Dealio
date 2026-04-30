@@ -1,5 +1,20 @@
+from urllib.parse import urlparse
+
 from app.tools.extract_product import ProductPageExtraction
 from app.tools.product_identity import ProductIdentity
+
+_SEEDED_RETAILER_SITES = ["amazon.com", "walmart.com", "target.com", "ebay.com"]
+
+_MAJOR_RETAILER_DOMAINS = frozenset({
+    "amazon.com",
+    "www.amazon.com",
+    "walmart.com",
+    "www.walmart.com",
+    "target.com",
+    "www.target.com",
+    "ebay.com",
+    "www.ebay.com",
+})
 
 SYSTEM_PROMPT = """You are a product research assistant. Evaluate whether a product listing
 is a good deal by comparing it to current market prices.
@@ -198,6 +213,28 @@ TOOLS = [
     },
 ]
 
+def build_seeded_retailer_queries(product_name: str, submitted_hostname: str) -> list[str]:
+    """Return seeded search queries for major retailers plus a brand/original-site search.
+
+    Always includes site: queries for Amazon, Walmart, Target, and eBay.
+
+    The brand/original-site query depends on where the product was submitted from:
+    - Submitted from a known major retailer: adds "<product> official site" so the agent
+      can find the brand's own page, which has not yet been checked.
+    - Submitted from any other site: adds "site:<submitted_domain> <product>" so the agent
+      explicitly searches the product's own website for comparable listings or pricing.
+    """
+    if submitted_hostname in _MAJOR_RETAILER_DOMAINS:
+        brand_query = f"{product_name} official site"
+    else:
+        submitted_site = submitted_hostname.removeprefix("www.")
+        brand_query = f"site:{submitted_site} {product_name}"
+
+    queries = [brand_query]
+    queries.extend(f"site:{site} {product_name}" for site in _SEEDED_RETAILER_SITES)
+    return queries
+
+
 _IDENTITY_SOURCE_DESCRIPTIONS = {
     "product_name": "extracted from the product page",
     "url_slug": "inferred from the URL path",
@@ -224,9 +261,19 @@ def build_initial_prompt(
         lines.append(f"Listed price: {extraction.listed_price}")
     if extraction.merchant:
         lines.append(f"Merchant: {extraction.merchant}")
+    lines.append("")
+    lines.append("Search for current pricing, comparable listings, and better alternatives if any.")
+
+    is_known = identity.source != "insufficient_data"
+    search_name = identity.value if is_known else extraction.product_name
+    if search_name:
+        submitted_hostname = urlparse(normalized_url).netloc
+        seeded_queries = build_seeded_retailer_queries(search_name, submitted_hostname)
+        lines.append("Include these retailer searches in your research:")
+        for query in seeded_queries:
+            lines.append(f"- {query}")
+
     lines.extend([
-        "",
-        "Search for current pricing, comparable listings, and better alternatives if any.",
         "Only cite URLs you have actually observed in tool results.",
         "Call submit_verdict when you have enough evidence.",
     ])

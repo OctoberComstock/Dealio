@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     anthropic_model: str = ""
     agent_timeout_seconds: int = 60
 
-    max_searches: int = 5
+    max_searches: int = 8
     max_fetched_pages: int = 8
     request_timeout_seconds: int = 60
 

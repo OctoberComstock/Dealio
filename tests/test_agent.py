@@ -211,7 +211,7 @@ async def test_fetch_page_cache_hit_does_not_decrement_budget(mock_create, extra
         make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b3")),
     ]
     with patch("app.agent.settings") as mock_settings:
-        mock_settings.max_searches = 5
+        mock_settings.max_searches = 8
         mock_settings.max_fetched_pages = 1
         mock_settings.agent_timeout_seconds = 60
         with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
@@ -480,7 +480,7 @@ async def test_fetch_budget_exhaustion_does_not_execute_extra_fetches(
     mock_create, extraction, identity
 ):
     with patch("app.agent.settings") as mock_settings:
-        mock_settings.max_searches = 5
+        mock_settings.max_searches = 8
         mock_settings.max_fetched_pages = 1
         mock_settings.agent_timeout_seconds = 60
         mock_create.side_effect = [
