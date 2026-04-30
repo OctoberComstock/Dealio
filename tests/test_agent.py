@@ -143,6 +143,192 @@ async def test_agent_executes_fetch_page_tool(mock_create, extraction, identity)
     assert isinstance(result, ResearchResult)
 
 
+async def test_fetch_page_cache_hit_for_submitted_url_skips_network_call(
+    mock_create, extraction, identity
+):
+    cached_page = FetchedPage(
+        url="https://example.com/product",
+        title="Great Widget",
+        content="Product content.",
+        price_guess="$29.99",
+    )
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block("fetch_page", {"url": "https://example.com/product"}, "b1")
+        ),
+        make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        await run_research_agent(
+            "https://example.com/product", extraction, identity,
+            initial_fetched_page=cached_page,
+        )
+    mock_fetch.assert_not_called()
+
+
+async def test_fetch_page_cache_hit_returns_cached_content(mock_create, extraction, identity):
+    cached_page = FetchedPage(
+        url="https://example.com/product",
+        title="Cached Widget Title",
+        content="Cached content here.",
+        price_guess="$29.99",
+    )
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block("fetch_page", {"url": "https://example.com/product"}, "b1")
+        ),
+        make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock):
+        await run_research_agent(
+            "https://example.com/product", extraction, identity,
+            initial_fetched_page=cached_page,
+        )
+    tool_result_content = mock_create.call_args_list[1].kwargs["messages"][-2]["content"][0]["content"]
+    assert "Cached Widget Title" in tool_result_content
+
+
+async def test_fetch_page_cache_hit_does_not_decrement_budget(mock_create, extraction, identity):
+    cached_page = FetchedPage(
+        url="https://example.com/product",
+        title="Great Widget",
+        content="Product content.",
+        price_guess="$29.99",
+    )
+    other_page = FetchedPage(
+        url="https://other.example.com/page",
+        title="Other Page",
+        content="Other content.",
+        price_guess=None,
+    )
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block("fetch_page", {"url": "https://example.com/product"}, "b1")
+        ),
+        make_response(
+            make_tool_block("fetch_page", {"url": "https://other.example.com/page"}, "b2")
+        ),
+        make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b3")),
+    ]
+    with patch("app.agent.settings") as mock_settings:
+        mock_settings.max_searches = 5
+        mock_settings.max_fetched_pages = 1
+        mock_settings.agent_timeout_seconds = 60
+        with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = other_page
+            result = await run_research_agent(
+                "https://example.com/product", extraction, identity,
+                initial_fetched_page=cached_page,
+            )
+    # Cache hit doesn't consume the one fetch slot, so the real fetch still executes.
+    mock_fetch.assert_called_once_with("https://other.example.com/page")
+    assert isinstance(result, ResearchResult)
+
+
+async def test_fetch_page_cache_hit_with_tracking_param_variant_matches(
+    mock_create, extraction, identity
+):
+    cached_page = FetchedPage(
+        url="https://example.com/product",
+        title="Great Widget",
+        content="Product content.",
+        price_guess="$29.99",
+    )
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block(
+                "fetch_page",
+                {"url": "https://example.com/product?utm_source=google"},
+                "b1",
+            )
+        ),
+        make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        await run_research_agent(
+            "https://example.com/product", extraction, identity,
+            initial_fetched_page=cached_page,
+        )
+    mock_fetch.assert_not_called()
+
+
+async def test_fetch_page_cache_miss_for_different_url_executes_normally(
+    mock_create, extraction, identity
+):
+    cached_page = FetchedPage(
+        url="https://example.com/product",
+        title="Great Widget",
+        content="Product content.",
+        price_guess="$29.99",
+    )
+    other_page = FetchedPage(
+        url="https://other.example.com/page",
+        title="Other Page",
+        content="Other content.",
+        price_guess=None,
+    )
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block("fetch_page", {"url": "https://other.example.com/page"}, "b1")
+        ),
+        make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = other_page
+        await run_research_agent(
+            "https://example.com/product", extraction, identity,
+            initial_fetched_page=cached_page,
+        )
+    mock_fetch.assert_called_once_with("https://other.example.com/page")
+
+
+async def test_fetch_page_cache_hit_logs_cache_hit_message(
+    mock_create, extraction, identity, caplog
+):
+    cached_page = FetchedPage(
+        url="https://example.com/product",
+        title="Great Widget",
+        content="Product content.",
+        price_guess="$29.99",
+    )
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block("fetch_page", {"url": "https://example.com/product"}, "b1")
+        ),
+        make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock):
+        with caplog.at_level(logging.INFO, logger="app.agent"):
+            await run_research_agent(
+                "https://example.com/product", extraction, identity,
+                initial_fetched_page=cached_page,
+            )
+    messages = [r.message for r in caplog.records]
+    assert any("cache hit" in m.lower() for m in messages)
+
+
+async def test_fetch_page_with_no_initial_page_executes_normally(mock_create, extraction, identity):
+    fetched = FetchedPage(
+        url="https://example.com/product",
+        title="Great Widget",
+        content="Product content.",
+        price_guess="$29.99",
+    )
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block("fetch_page", {"url": "https://example.com/product"}, "b1")
+        ),
+        make_response(make_tool_block("submit_verdict", VALID_VERDICT, "b2")),
+    ]
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = fetched
+        await run_research_agent(
+            "https://example.com/product", extraction, identity,
+            initial_fetched_page=None,
+        )
+    mock_fetch.assert_called_once_with("https://example.com/product")
+
+
 async def test_tool_errors_are_returned_as_tool_results(mock_create, extraction, identity):
     mock_create.side_effect = [
         make_response(make_tool_block("search_web", {"query": "widget"}, "b1")),

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from pydantic import BaseModel
@@ -9,6 +10,12 @@ class ProductPageExtraction(BaseModel):
     product_name: str | None
     listed_price: str | None
     merchant: str | None
+
+
+@dataclass
+class ProductExtractionResult:
+    extraction: ProductPageExtraction
+    fetched_page: FetchedPage | None
 
 
 def _merchant_from_url(url: str) -> str | None:
@@ -23,13 +30,19 @@ def _extraction_from_page(page: FetchedPage, source_url: str) -> ProductPageExtr
     )
 
 
-async def extract_product(url: str) -> ProductPageExtraction:
+async def extract_product(url: str) -> ProductExtractionResult:
     try:
         page = await fetch_page(url)
     except ValueError:
-        return ProductPageExtraction(
-            product_name=None,
-            listed_price=None,
-            merchant=_merchant_from_url(url),
+        return ProductExtractionResult(
+            extraction=ProductPageExtraction(
+                product_name=None,
+                listed_price=None,
+                merchant=_merchant_from_url(url),
+            ),
+            fetched_page=None,
         )
-    return _extraction_from_page(page, url)
+    return ProductExtractionResult(
+        extraction=_extraction_from_page(page, url),
+        fetched_page=page,
+    )

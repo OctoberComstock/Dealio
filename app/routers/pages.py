@@ -54,7 +54,9 @@ async def submit_product_url(request: Request, product_url: str = Form(default="
         t_start = time.perf_counter()
         logger.info("Research starting: url=%s", normalized)
 
-        extraction = await extract_product(normalized)
+        extraction_result = await extract_product(normalized)
+        extraction = extraction_result.extraction
+        fetched_page = extraction_result.fetched_page
         identity = infer_product_identity(extraction, normalized)
         logger.info(
             "Product extracted: name=%r price=%r merchant=%r identity=%r source=%s",
@@ -65,7 +67,9 @@ async def submit_product_url(request: Request, product_url: str = Form(default="
             identity.source,
         )
 
-        result = await run_research_agent(normalized, extraction, identity)
+        result = await run_research_agent(
+            normalized, extraction, identity, initial_fetched_page=fetched_page
+        )
         run_id = await save_research_run(
             settings.database_path,
             normalized,

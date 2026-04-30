@@ -11,7 +11,7 @@ from app.config import settings
 from app.prompts import SYSTEM_PROMPT, TOOLS, build_initial_prompt
 from app.schemas import ResearchResult
 from app.tools.extract_product import ProductPageExtraction
-from app.tools.fetch_page import fetch_page
+from app.tools.fetch_page import FetchedPage, fetch_page
 from app.tools.normalize_url import normalize_url
 from app.tools.product_identity import ProductIdentity
 from app.tools.search_web import search_web
@@ -90,6 +90,8 @@ async def _execute_tool(
     tool_input: dict,
     seen_urls: set[str],
     budget: _RemainingToolBudget,
+    normalized_submitted_url: str,
+    initial_fetched_page: FetchedPage | None,
 ) -> str:
     if tool_name == "search_web":
         if budget.searches_remaining <= 0:
@@ -119,6 +121,20 @@ async def _execute_tool(
             return f"Search error: {exc}"
 
     if tool_name == "fetch_page":
+        url = tool_input.get("url")
+        if not url:
+            return "Tool error: 'url' is required for fetch_page."
+
+        if initial_fetched_page is not None:
+            try:
+                normalized_requested = normalize_url(url)
+            except ValueError:
+                normalized_requested = url
+            if normalized_requested == normalized_submitted_url:
+                logger.info("fetch_page cache hit for initial submitted URL: url=%r", url)
+                _observe_url(initial_fetched_page.url, seen_urls)
+                return _format_fetched_page(initial_fetched_page)
+
         if budget.fetches_remaining <= 0:
             logger.warning(
                 "Fetch budget exhausted (max_fetched_pages=%d)", settings.max_fetched_pages
@@ -129,9 +145,6 @@ async def _execute_tool(
             )
         # Decrement before executing so malformed or failed calls still consume budget.
         budget.fetches_remaining -= 1
-        url = tool_input.get("url")
-        if not url:
-            return "Tool error: 'url' is required for fetch_page."
         logger.info("fetch_page: url=%r fetches_remaining=%d", url, budget.fetches_remaining)
         try:
             page = await fetch_page(url)
@@ -289,6 +302,7 @@ async def _run_agent_loop(
     normalized_url: str,
     extraction: ProductPageExtraction,
     identity: ProductIdentity,
+    initial_fetched_page: FetchedPage | None = None,
 ) -> ResearchResult:
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     seen_urls: set[str] = set()
@@ -348,7 +362,8 @@ async def _run_agent_loop(
                 })
             else:
                 result_content = await _execute_tool(
-                    block.name, block.input, seen_urls, budget
+                    block.name, block.input, seen_urls, budget,
+                    normalized_url, initial_fetched_page
                 )
                 tool_results.append({
                     "type": "tool_result",
@@ -379,10 +394,11 @@ async def run_research_agent(
     normalized_url: str,
     extraction: ProductPageExtraction,
     identity: ProductIdentity,
+    initial_fetched_page: FetchedPage | None = None,
 ) -> ResearchResult:
     try:
         return await asyncio.wait_for(
-            _run_agent_loop(normalized_url, extraction, identity),
+            _run_agent_loop(normalized_url, extraction, identity, initial_fetched_page),
             timeout=settings.agent_timeout_seconds,
         )
     except asyncio.TimeoutError:
