@@ -214,15 +214,24 @@ TOOLS = [
 ]
 
 def build_seeded_retailer_queries(product_name: str, submitted_hostname: str) -> list[str]:
-    """Return seeded search queries for major retailers plus brand site when applicable.
+    """Return seeded search queries for major retailers plus a brand/original-site search.
 
     Always includes site: queries for Amazon, Walmart, Target, and eBay.
-    Adds a brand-site search only when the submitted URL is itself from a major retailer,
-    meaning the brand's own site has not yet been checked.
+
+    The brand/original-site query depends on where the product was submitted from:
+    - Submitted from a known major retailer: adds "<product> official site" so the agent
+      can find the brand's own page, which has not yet been checked.
+    - Submitted from any other site: adds "site:<submitted_domain> <product>" so the agent
+      explicitly searches the product's own website for comparable listings or pricing.
     """
-    queries = [f"site:{site} {product_name}" for site in _SEEDED_RETAILER_SITES]
     if submitted_hostname in _MAJOR_RETAILER_DOMAINS:
-        queries.append(f"{product_name} official site")
+        brand_query = f"{product_name} official site"
+    else:
+        submitted_site = submitted_hostname.removeprefix("www.")
+        brand_query = f"site:{submitted_site} {product_name}"
+
+    queries = [brand_query]
+    queries.extend(f"site:{site} {product_name}" for site in _SEEDED_RETAILER_SITES)
     return queries
 
 
