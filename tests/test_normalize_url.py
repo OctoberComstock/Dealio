@@ -1,6 +1,6 @@
 import pytest
 
-from app.tools.normalize_url import normalize_url
+from app.tools.normalize_url import fetch_page_cache_key, normalize_url
 
 
 def test_empty_string_raises():
@@ -130,3 +130,40 @@ def test_same_logical_url_normalizes_identically():
 def test_idempotent():
     url = "https://example.com/product?color=red&size=large"
     assert normalize_url(url) == normalize_url(normalize_url(url))
+
+
+# --- fetch_page_cache_key ---
+
+
+def test_fetch_page_cache_key_amazon_dp_path_returns_asin_key():
+    url = "https://www.amazon.com/Product-Name/dp/B08W2HG4WP?th=1"
+    assert fetch_page_cache_key(url) == "https://www.amazon.com/dp/B08W2HG4WP"
+
+
+def test_fetch_page_cache_key_amazon_with_tracking_params_matches_clean_url():
+    submitted = (
+        "https://www.amazon.com/Product-Name/dp/B08W2HG4WP"
+        "?_encoding=UTF8&pd_rd_r=abc&pd_rd_w=def&pf_rd_p=ghi&pf_rd_r=jkl"
+    )
+    agent_requested = "https://www.amazon.com/Haruharu/dp/B08W2HG4WP?th=1"
+    assert fetch_page_cache_key(submitted) == fetch_page_cache_key(agent_requested)
+
+
+def test_fetch_page_cache_key_amazon_gp_product_path():
+    url = "https://www.amazon.com/gp/product/B08W2HG4WP?pf_rd_r=abc"
+    assert fetch_page_cache_key(url) == "https://www.amazon.com/dp/B08W2HG4WP"
+
+
+def test_fetch_page_cache_key_amazon_different_asins_do_not_match():
+    url_a = "https://www.amazon.com/dp/B08W2HG4WP"
+    url_b = "https://www.amazon.com/dp/B09XYZ12345"
+    assert fetch_page_cache_key(url_a) != fetch_page_cache_key(url_b)
+
+
+def test_fetch_page_cache_key_non_amazon_uses_normalize_url():
+    url = "https://example.com/product?utm_source=google"
+    assert fetch_page_cache_key(url) == normalize_url(url)
+
+
+def test_fetch_page_cache_key_invalid_url_returns_raw():
+    assert fetch_page_cache_key("not-a-url") == "not-a-url"
