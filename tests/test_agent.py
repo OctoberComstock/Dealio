@@ -553,89 +553,53 @@ async def test_search_web_result_without_price_does_not_become_offer_candidate(
     assert "$100" not in confirmation_tool_result
 
 
-async def test_fetch_page_cache_hit_adds_cached_page_as_offer_candidate(
+async def test_fetch_page_cache_hit_skips_network_and_comparable_candidates_are_found(
     mock_create, extraction, identity
 ):
-    cached_amazon_page = FetchedPage(
-        url="https://www.amazon.com/great-widget/dp/B000000001",
+    """When the submitted URL is served from the cache, no network call is made for it.
+    The agent can still find comparable offers by fetching other pages normally.
+    """
+    submitted_url = "https://example.com/product"
+    amazon_url = "https://www.amazon.com/great-widget/dp/B000000001"
+
+    cached_submitted_page = FetchedPage(
+        url=submitted_url,
+        title="Great Widget 100ml",
+        content="Great Widget 100ml. Listed at $29.99.",
+        price_guess="$29.99",
+    )
+    amazon_page = FetchedPage(
+        url=amazon_url,
         title="Great Widget 100ml on Amazon",
         content="Great Widget 100ml for $7.95.",
         price_guess="$7.95",
     )
-    stylevana_page = FetchedPage(
-        url="https://www.stylevana.com/great-widget.html",
-        title="Great Widget 100ml on Stylevana",
-        content="Great Widget 100ml for $11.90.",
-        price_guess="$11.90",
+    evidence_urls = [amazon_url, submitted_url, submitted_url]
+    amazon_verdict = _verdict_with_evidence_and_alternative(
+        _make_alternative(amazon_url, "$7.95"), evidence_urls
     )
-    amazon_url = "https://www.amazon.com/great-widget/dp/B000000001"
-    stylevana_url = "https://www.stylevana.com/great-widget.html"
-    observed_evidence = [
-        {"text": "Listed at $29.99 on Amazon.", "source_url": amazon_url},
-        {"text": "Stylevana lists it at $11.90.", "source_url": stylevana_url},
-        {"text": "Amazon lists it at $7.95.", "source_url": amazon_url},
-    ]
-    stylevana_verdict = {
-        **VALID_VERDICT,
-        "evidence": observed_evidence,
-        "alternative": {
-            "product_name": "Great Widget 100ml on Stylevana",
-            "price": "$11.90",
-            "reason": "Cheaper than submitted listing.",
-            "source_url": stylevana_url,
-            "is_cheaper": True,
-            "is_better_reviewed": False,
-        },
-    }
-    amazon_verdict = {
-        **VALID_VERDICT,
-        "evidence": observed_evidence,
-        "alternative": {
-            "product_name": "Great Widget 100ml on Amazon",
-            "price": "$7.95",
-            "reason": "Lowest eligible comparable offer.",
-            "source_url": amazon_url,
-            "is_cheaper": True,
-            "is_better_reviewed": False,
-        },
-    }
 
     mock_create.side_effect = [
-        make_response(
-            make_tool_block(
-                "fetch_page",
-                {"url": amazon_url},
-                "b1",
-            )
-        ),
-        make_response(
-            make_tool_block(
-                "fetch_page",
-                {"url": stylevana_url},
-                "b2",
-            )
-        ),
-        make_response(make_tool_block("submit_verdict", stylevana_verdict, "b3")),
+        make_response(make_tool_block("fetch_page", {"url": submitted_url}, "b1")),
+        make_response(make_tool_block("fetch_page", {"url": amazon_url}, "b2")),
+        make_response(make_tool_block("submit_verdict", amazon_verdict, "b3")),
         make_response(make_tool_block("submit_verdict", amazon_verdict, "b4")),
     ]
 
     with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
-        mock_fetch.return_value = stylevana_page
+        mock_fetch.return_value = amazon_page
 
         result = await run_research_agent(
-            "https://www.amazon.com/great-widget/dp/B000000001",
+            submitted_url,
             extraction,
             identity,
-            initial_fetched_page=cached_amazon_page,
+            initial_fetched_page=cached_submitted_page,
         )
 
-    mock_fetch.assert_called_once_with("https://www.stylevana.com/great-widget.html")
+    # The cache hit should have prevented a network call for the submitted URL.
+    mock_fetch.assert_called_once_with(amazon_url)
     assert result.alternative is not None
-    assert result.alternative.price == "$7.95"
-
-    rejection_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
-    assert "www.amazon.com" in rejection_tool_result
-    assert "$7.95" in rejection_tool_result
+    assert "amazon" in str(result.alternative.source_url).lower()
 
 
 async def test_duplicate_search_and_fetch_url_only_appears_once_in_offer_table(
@@ -924,6 +888,7 @@ async def test_fetch_budget_exhaustion_does_not_execute_extra_fetches(
         mock_settings.max_searches = 8
         mock_settings.max_fetched_pages = 1
         mock_settings.agent_timeout_seconds = 120
+        mock_settings.meaningful_savings_threshold = 0.10
         mock_create.side_effect = [
             make_response(make_tool_block("fetch_page", {"url": "https://example.com/p1"}, "b1")),
             make_response(make_tool_block("fetch_page", {"url": "https://example.com/p2"}, "b2")),
@@ -1582,6 +1547,78 @@ async def test_no_alternative_required_when_no_eligible_cheaper_offer(
     assert mock_create.call_count == 1
 
 
+async def test_no_alternative_rejected_when_eligible_candidates_exist(mock_create, extraction):
+    amazon_url = "https://www.amazon.com/cleanser"
+    submitted_url = "https://example.com/product"
+    identity = ProductIdentity(value="Great Widget", source="product_name")
+
+    amazon_page = _make_fetched_page(amazon_url, "Great Widget", "$7.95")
+    evidence_urls = [amazon_url, submitted_url, submitted_url]
+
+    verdict_no_alt = _verdict_with_evidence_and_alternative(None, evidence_urls)
+    verdict_amazon = _verdict_with_evidence_and_alternative(
+        _make_alternative(amazon_url, "$7.95"), evidence_urls
+    )
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": amazon_url}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict_no_alt, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_amazon, "b3")),
+    ]
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = amazon_page
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.alternative is not None
+    assert "amazon" in str(result.alternative.source_url).lower()
+
+    rejection_tool_result = mock_create.call_args_list[2].kwargs["messages"][-2]["content"][0]["content"]
+    assert "Please include the lowest eligible comparable offer" in rejection_tool_result
+    assert "www.amazon.com" in rejection_tool_result
+    assert "$7.95" in rejection_tool_result
+
+
+async def test_alternative_url_rejected_when_wrong_source_url(mock_create, extraction):
+    amazon_url = "https://www.amazon.com/cleanser"
+    stylevana_url = "https://www.stylevana.com/cleanser"
+    submitted_url = "https://example.com/product"
+    identity = ProductIdentity(value="Great Widget", source="product_name")
+
+    amazon_page = _make_fetched_page(amazon_url, "Great Widget", "$7.95")
+    stylevana_page = _make_fetched_page(stylevana_url, "Great Widget", "$11.90")
+    evidence_urls = [amazon_url, stylevana_url, submitted_url]
+
+    # Amazon is cheapest, but agent submits Stylevana URL with Amazon price.
+    wrong_url_verdict = _verdict_with_evidence_and_alternative(
+        _make_alternative(stylevana_url, "$7.95"), evidence_urls
+    )
+    verdict_amazon = _verdict_with_evidence_and_alternative(
+        _make_alternative(amazon_url, "$7.95"), evidence_urls
+    )
+
+    def fetch_side_effect(url):
+        return amazon_page if "amazon" in url else stylevana_page
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": amazon_url}, "b1")),
+        make_response(make_tool_block("fetch_page", {"url": stylevana_url}, "b2")),
+        make_response(make_tool_block("submit_verdict", wrong_url_verdict, "b3")),
+        make_response(make_tool_block("submit_verdict", verdict_amazon, "b4")),
+    ]
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.side_effect = fetch_side_effect
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.alternative is not None
+    assert "amazon" in str(result.alternative.source_url).lower()
+
+    rejection_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    assert "source URL does not match" in rejection_tool_result
+    assert "www.amazon.com" in rejection_tool_result
+
+
 def test_validate_alternative_is_lowest_rejects_with_clear_error():
     from app.agent import _validate_alternative_is_lowest
     from app.tools.offer_candidates import OfferCandidate
@@ -1609,6 +1646,45 @@ def test_validate_alternative_is_lowest_rejects_with_clear_error():
     assert "www.amazon.com" in rejection
     assert "7.95" in rejection
     assert "13.59" in rejection
+
+
+def test_validate_alternative_is_lowest_rejects_wrong_url():
+    from app.agent import _validate_alternative_is_lowest
+    from app.tools.offer_candidates import OfferCandidate
+
+    eligible = [
+        OfferCandidate(
+            merchant="www.amazon.com",
+            source_url="https://www.amazon.com/p",
+            product_name="Widget",
+            price_text="$7.95",
+            price_amount=7.95,
+        ),
+    ]
+    # Right price, wrong URL.
+    alternative = {"price": "$7.95", "source_url": "https://www.stylevana.com/p"}
+    rejection = _validate_alternative_is_lowest(alternative, eligible)
+
+    assert rejection is not None
+    assert "source URL does not match" in rejection
+    assert "www.amazon.com" in rejection
+
+
+def test_validate_alternative_is_lowest_accepts_correct_price_and_url():
+    from app.agent import _validate_alternative_is_lowest
+    from app.tools.offer_candidates import OfferCandidate
+
+    eligible = [
+        OfferCandidate(
+            merchant="www.amazon.com",
+            source_url="https://www.amazon.com/p",
+            product_name="Widget",
+            price_text="$7.95",
+            price_amount=7.95,
+        ),
+    ]
+    alternative = {"price": "$7.95", "source_url": "https://www.amazon.com/p"}
+    assert _validate_alternative_is_lowest(alternative, eligible) is None
 
 
 # --- System prompt tests ---
