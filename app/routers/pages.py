@@ -9,7 +9,12 @@ from pydantic import HttpUrl, TypeAdapter, ValidationError
 
 from app.agent import run_research_agent
 from app.config import settings
-from app.database import load_research_run, save_research_run
+from app.database import (
+    complete_research_run,
+    create_research_run,
+    load_research_run,
+    mark_research_run_failed,
+)
 from app.schemas import ResearchResult
 from app.tools.extract_product import extract_product
 from app.tools.normalize_url import normalize_url
@@ -49,6 +54,7 @@ async def submit_product_url(request: Request, product_url: str = Form(default="
             status_code=422,
         )
 
+    run_id: str | None = None
     try:
         normalized = normalize_url(product_url.strip())
         t_start = time.perf_counter()
@@ -67,12 +73,14 @@ async def submit_product_url(request: Request, product_url: str = Form(default="
             identity.source,
         )
 
+        run_id = await create_research_run(settings.database_path, normalized)
+
         result = await run_research_agent(
             normalized, extraction, identity, initial_fetched_page=fetched_page
         )
-        run_id = await save_research_run(
+        await complete_research_run(
             settings.database_path,
-            normalized,
+            run_id,
             result.model_dump(mode="json"),
             result.last_checked,
         )
@@ -86,6 +94,8 @@ async def submit_product_url(request: Request, product_url: str = Form(default="
         )
     except Exception:
         logger.exception("Research flow failed for URL: %s", product_url)
+        if run_id is not None:
+            await mark_research_run_failed(settings.database_path, run_id)
         return templates.TemplateResponse(
             request=request,
             name="index.html",
@@ -102,7 +112,7 @@ async def submit_product_url(request: Request, product_url: str = Form(default="
 @router.get("/result/{run_id}", response_class=HTMLResponse)
 async def result_page(request: Request, run_id: str):
     run = await load_research_run(settings.database_path, run_id)
-    if run is None:
+    if run is None or run["result_payload"] is None:
         raise HTTPException(status_code=404, detail="Result not found")
     result = ResearchResult.model_validate(run["result_payload"])
     checked_at = datetime.fromisoformat(run["checked_at"])
