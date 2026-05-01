@@ -6,6 +6,7 @@ from app.tools.offer_candidates import (
     extract_offer_price_text,
     format_offer_table,
     is_same_size,
+    is_unavailable,
     parse_price_amount,
 )
 from app.tools.search_web import SearchResult
@@ -96,6 +97,109 @@ def test_is_same_size_both_no_size_is_permissive():
     assert is_same_size("Haruharu Cleanser", "Some Other Cleanser") is True
 
 
+def test_is_same_size_fl_oz_equivalent_to_ml():
+    assert is_same_size("Haruharu Cleanser 100ml", "Wonder Cleanser 3.4 fl oz") is True
+
+
+def test_is_same_size_3_38_fl_oz_equivalent_to_100ml():
+    assert is_same_size("Haruharu Cleanser 100ml", "Wonder Cleanser 3.38 fl oz") is True
+
+
+def test_is_same_size_200ml_not_equivalent_to_100ml_fl_oz():
+    assert is_same_size("Haruharu Cleanser 200ml", "Wonder Cleanser 3.4 fl oz") is False
+
+
+def test_is_same_size_dot_fl_oz_format():
+    assert is_same_size("Haruharu Cleanser 100ml", "Wonder Cleanser 3.4 fl.oz") is True
+
+
+def test_is_same_size_uses_match_text_when_title_lacks_size():
+    assert is_same_size(
+        "Haruharu Cleanser 100ml",
+        "Wonder Cleanser",
+        match_text="100ml / 3.4 fl oz",
+    ) is True
+
+
+def test_is_same_size_match_text_with_fl_oz_equivalent():
+    assert is_same_size(
+        "Haruharu Cleanser 100ml",
+        "Wonder Cleanser",
+        match_text="3.4 fl oz cleanser",
+    ) is True
+
+
+def test_is_same_size_wrong_size_in_match_text():
+    assert is_same_size(
+        "Haruharu Cleanser 100ml",
+        "Wonder Cleanser",
+        match_text="200ml cleanser",
+    ) is False
+
+
+# --- is_unavailable ---
+
+
+def test_is_unavailable_out_of_stock():
+    candidate = OfferCandidate(
+        merchant="www.walmart.com",
+        source_url="https://www.walmart.com/p",
+        product_name="Cleanser 100ml",
+        price_text="$5.99",
+        price_amount=5.99,
+        match_text="This item is out of stock.",
+    )
+    assert is_unavailable(candidate) is True
+
+
+def test_is_unavailable_sold_out():
+    candidate = OfferCandidate(
+        merchant="www.target.com",
+        source_url="https://www.target.com/p",
+        product_name="Cleanser 100ml",
+        price_text="$6.99",
+        price_amount=6.99,
+        match_text="Sold out. Check back later.",
+    )
+    assert is_unavailable(candidate) is True
+
+
+def test_is_unavailable_currently_unavailable():
+    candidate = OfferCandidate(
+        merchant="www.amazon.com",
+        source_url="https://www.amazon.com/p",
+        product_name="Cleanser 100ml",
+        price_text="$7.95",
+        price_amount=7.95,
+        match_text="Currently unavailable.",
+    )
+    assert is_unavailable(candidate) is True
+
+
+def test_is_unavailable_unavailable_signal_in_product_name():
+    candidate = OfferCandidate(
+        merchant="www.amazon.com",
+        source_url="https://www.amazon.com/p",
+        product_name="Cleanser 100ml - Unavailable",
+        price_text="$7.95",
+        price_amount=7.95,
+        match_text="",
+    )
+    assert is_unavailable(candidate) is True
+
+
+def test_is_unavailable_in_stock_candidate_returns_false():
+    candidate = OfferCandidate(
+        merchant="www.amazon.com",
+        source_url="https://www.amazon.com/p",
+        product_name="Cleanser 100ml",
+        price_text="$7.95",
+        price_amount=7.95,
+        match_text="In stock. Ships within 2 days.",
+    )
+    assert is_unavailable(candidate) is False
+
+
 # --- candidate_from_page ---
 
 
@@ -152,6 +256,26 @@ def test_candidate_from_page_marks_source_type_fetched_page():
     assert candidate_from_page(page).source_type == "fetched_page"
 
 
+def test_candidate_from_page_populates_match_text_from_content():
+    page = FetchedPage(
+        url="https://www.amazon.com/product",
+        title="Cleanser",
+        content="100ml / 3.4 fl oz. In stock.",
+        price_guess="$7.95",
+    )
+    assert "3.4 fl oz" in candidate_from_page(page).match_text
+
+
+def test_candidate_from_page_match_text_truncates_long_content():
+    page = FetchedPage(
+        url="https://www.amazon.com/product",
+        title="Cleanser",
+        content="x" * 1000,
+        price_guess="$7.95",
+    )
+    assert len(candidate_from_page(page).match_text) <= 500
+
+
 # --- candidate_from_search_result ---
 
 
@@ -172,6 +296,7 @@ def test_candidate_from_search_result_returns_candidate_when_snippet_contains_pr
     assert candidate.price_text == "$7.95"
     assert candidate.price_amount == 7.95
     assert candidate.source_type == "search_result"
+    assert "3.4 fl oz" in candidate.match_text
 
 
 def test_candidate_from_search_result_returns_candidate_when_title_contains_price():

@@ -19,6 +19,7 @@ from app.tools.offer_candidates import (
     candidate_from_search_result,
     format_offer_table,
     is_same_size,
+    is_unavailable,
     parse_price_amount,
 )
 from app.tools.product_identity import ProductIdentity
@@ -107,7 +108,9 @@ def _build_eligible_candidates(
         savings = (submitted_price - candidate.price_amount) / submitted_price
         if savings < settings.meaningful_savings_threshold:
             continue
-        if not is_same_size(identity_value, candidate.product_name):
+        if is_unavailable(candidate):
+            continue
+        if not is_same_size(identity_value, candidate.product_name, candidate.match_text):
             continue
         eligible.append(candidate)
     eligible.sort(key=lambda c: c.price_amount)

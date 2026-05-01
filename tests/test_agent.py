@@ -726,6 +726,112 @@ async def test_duplicate_search_and_fetch_url_only_appears_once_in_offer_table(
     assert "$7.95" in rejection_tool_result
 
 
+async def test_out_of_stock_candidate_excluded_from_offer_table(
+    mock_create, extraction, identity
+):
+    walmart_page = FetchedPage(
+        url="https://www.walmart.com/ip/great-widget",
+        title="Great Widget",
+        content="Great Widget. Out of stock.",
+        price_guess="$5.99",
+    )
+    amazon_page = FetchedPage(
+        url="https://www.amazon.com/great-widget/dp/B000000001",
+        title="Great Widget",
+        content="Great Widget. In stock.",
+        price_guess="$7.95",
+    )
+    amazon_verdict = {
+        **VALID_VERDICT,
+        "alternative": {
+            "product_name": "Great Widget on Amazon",
+            "price": "$7.95",
+            "reason": "Lowest eligible comparable offer.",
+            "source_url": "https://www.amazon.com/great-widget/dp/B000000001",
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": "https://www.walmart.com/ip/great-widget"}, "b1")),
+        make_response(make_tool_block("fetch_page", {"url": "https://www.amazon.com/great-widget/dp/B000000001"}, "b2")),
+        make_response(make_tool_block("submit_verdict", amazon_verdict, "b3")),
+        make_response(make_tool_block("submit_verdict", amazon_verdict, "b4")),
+    ]
+
+    async def fake_fetch(url: str) -> FetchedPage:
+        if "walmart" in url:
+            return walmart_page
+        return amazon_page
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.side_effect = fake_fetch
+
+        result = await run_research_agent(
+            "https://example.com/product",
+            extraction,
+            identity,
+        )
+
+    assert result.alternative is not None
+    assert result.alternative.price == "$7.95"
+
+    # The offer table sent to the agent should include Amazon but exclude the out-of-stock Walmart.
+    offer_table_message = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    assert "www.amazon.com" in offer_table_message
+    assert "www.walmart.com" not in offer_table_message
+
+
+async def test_candidate_eligible_when_size_in_content_not_title(
+    mock_create, extraction, identity
+):
+    """Amazon title lacks '100ml' but page content includes '3.4 fl oz / 100ml'.
+    The candidate should remain eligible when the submitted product specifies 100ml.
+    """
+    identity_with_size = ProductIdentity(value="Great Widget 100ml", source="product_name")
+
+    amazon_page = FetchedPage(
+        url="https://www.amazon.com/great-widget/dp/B000000001",
+        title="Great Widget",
+        content="Great Widget 3.4 fl oz / 100ml. $7.95.",
+        price_guess="$7.95",
+    )
+    amazon_verdict = {
+        **VALID_VERDICT,
+        "alternative": {
+            "product_name": "Great Widget on Amazon",
+            "price": "$7.95",
+            "reason": "Lowest eligible comparable offer.",
+            "source_url": "https://www.amazon.com/great-widget/dp/B000000001",
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": "https://www.amazon.com/great-widget/dp/B000000001"}, "b1")),
+        make_response(make_tool_block("submit_verdict", amazon_verdict, "b2")),
+        make_response(make_tool_block("submit_verdict", amazon_verdict, "b3")),
+    ]
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = amazon_page
+
+        result = await run_research_agent(
+            "https://example.com/product",
+            extraction,
+            identity_with_size,
+        )
+
+    assert result.alternative is not None
+    assert result.alternative.price == "$7.95"
+
+    # Amazon should appear in the offer table (eligible despite title lacking '100ml').
+    offer_table_message = mock_create.call_args_list[2].kwargs["messages"][-2]["content"][0]["content"]
+    assert "www.amazon.com" in offer_table_message
+
+
 async def test_tool_errors_are_returned_as_tool_results(mock_create, extraction, identity):
     mock_create.side_effect = [
         make_response(make_tool_block("search_web", {"query": "widget"}, "b1")),
