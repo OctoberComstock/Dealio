@@ -29,6 +29,33 @@ def make_response(*blocks):
     response.content = list(blocks)
     return response
 
+def tool_result_contents(mock_create: AsyncMock) -> list[str]:
+    contents: list[str] = []
+
+    for call in mock_create.call_args_list:
+        messages = call.kwargs["messages"]
+
+        for message in messages:
+            if not isinstance(message, dict):
+                continue
+            if message.get("role") != "user":
+                continue
+
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") != "tool_result":
+                    continue
+                result_content = item.get("content")
+                if isinstance(result_content, str):
+                    contents.append(result_content)
+
+    return contents
+
 
 VALID_VERDICT = {
     "product_name": "Great Widget",
@@ -389,6 +416,314 @@ async def test_fetch_page_cache_hit_observes_both_requested_and_cached_url(
         )
     assert result.verdict.value == "good_deal"
     assert any(str(e.source_url) == requested_url for e in result.evidence)
+
+async def test_search_web_priced_result_can_drive_offer_table(
+    mock_create, extraction, identity
+):
+    amazon_result = SearchResult(
+        title="Amazon.com: Great Widget",
+        url="https://www.amazon.com/great-widget/dp/B000000001",
+        snippet="Great Widget 100ml is available for $7.95.",
+        metadata={"source": "tavily", "score": 0.95},
+    )
+    stylevana_page = FetchedPage(
+        url="https://www.stylevana.com/great-widget.html",
+        title="Great Widget 100ml on Stylevana",
+        content="Great Widget 100ml for $11.90.",
+        price_guess="$11.90",
+    )
+    stylevana_verdict = {
+        **VALID_VERDICT,
+        "alternative": {
+            "product_name": "Great Widget 100ml on Stylevana",
+            "price": "$11.90",
+            "reason": "Cheaper than submitted listing.",
+            "source_url": "https://www.stylevana.com/great-widget.html",
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+    amazon_verdict = {
+        **VALID_VERDICT,
+        "alternative": {
+            "product_name": "Great Widget on Amazon",
+            "price": "$7.95",
+            "reason": "Lowest eligible comparable offer.",
+            "source_url": "https://www.amazon.com/great-widget/dp/B000000001",
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "Great Widget Amazon"}, "b1")),
+        make_response(
+            make_tool_block(
+                "fetch_page",
+                {"url": "https://www.stylevana.com/great-widget.html"},
+                "b2",
+            )
+        ),
+        make_response(make_tool_block("submit_verdict", stylevana_verdict, "b3")),
+        make_response(make_tool_block("submit_verdict", amazon_verdict, "b4")),
+    ]
+
+    with (
+        patch("app.agent.search_web", new_callable=AsyncMock) as mock_search,
+        patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch,
+    ):
+        mock_search.return_value = [amazon_result]
+        mock_fetch.return_value = stylevana_page
+
+        result = await run_research_agent(
+            "https://example.com/product",
+            extraction,
+            identity,
+        )
+
+    assert result.alternative is not None
+    assert result.alternative.price == "$7.95"
+
+    rejection_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    assert "Comparable offers found" in rejection_tool_result
+    assert "www.amazon.com" in rejection_tool_result
+    assert "$7.95" in rejection_tool_result
+    assert "www.stylevana.com" in rejection_tool_result
+    assert "$11.90" in rejection_tool_result
+
+
+async def test_search_web_result_without_price_does_not_become_offer_candidate(
+    mock_create, extraction, identity
+):
+    amazon_result_without_price = SearchResult(
+        title="Amazon.com: Great Widget 100ml",
+        url="https://www.amazon.com/great-widget/dp/B000000001",
+        snippet="Great Widget 100ml. Price not shown.",
+        metadata={"source": "tavily", "score": 0.95},
+    )
+    stylevana_page = FetchedPage(
+        url="https://www.stylevana.com/great-widget.html",
+        title="Great Widget 100ml on Stylevana",
+        content="Great Widget 100ml for $11.90.",
+        price_guess="$11.90",
+    )
+    stylevana_verdict = {
+        **VALID_VERDICT,
+        "alternative": {
+            "product_name": "Great Widget 100ml on Stylevana",
+            "price": "$11.90",
+            "reason": "Cheaper than submitted listing.",
+            "source_url": "https://www.stylevana.com/great-widget.html",
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "Great Widget Amazon"}, "b1")),
+        make_response(
+            make_tool_block(
+                "fetch_page",
+                {"url": "https://www.stylevana.com/great-widget.html"},
+                "b2",
+            )
+        ),
+        make_response(make_tool_block("submit_verdict", stylevana_verdict, "b3")),
+        make_response(make_tool_block("submit_verdict", stylevana_verdict, "b4")),
+    ]
+
+    with (
+        patch("app.agent.search_web", new_callable=AsyncMock) as mock_search,
+        patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch,
+    ):
+        mock_search.return_value = [amazon_result_without_price]
+        mock_fetch.return_value = stylevana_page
+
+        result = await run_research_agent(
+            "https://example.com/product",
+            extraction,
+            identity,
+        )
+
+    assert result.alternative is not None
+    assert result.alternative.price == "$11.90"
+
+    confirmation_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    assert "www.amazon.com" not in confirmation_tool_result
+    assert "$100" not in confirmation_tool_result
+
+
+async def test_fetch_page_cache_hit_adds_cached_page_as_offer_candidate(
+    mock_create, extraction, identity
+):
+    cached_amazon_page = FetchedPage(
+        url="https://www.amazon.com/great-widget/dp/B000000001",
+        title="Great Widget 100ml on Amazon",
+        content="Great Widget 100ml for $7.95.",
+        price_guess="$7.95",
+    )
+    stylevana_page = FetchedPage(
+        url="https://www.stylevana.com/great-widget.html",
+        title="Great Widget 100ml on Stylevana",
+        content="Great Widget 100ml for $11.90.",
+        price_guess="$11.90",
+    )
+    amazon_url = "https://www.amazon.com/great-widget/dp/B000000001"
+    stylevana_url = "https://www.stylevana.com/great-widget.html"
+    observed_evidence = [
+        {"text": "Listed at $29.99 on Amazon.", "source_url": amazon_url},
+        {"text": "Stylevana lists it at $11.90.", "source_url": stylevana_url},
+        {"text": "Amazon lists it at $7.95.", "source_url": amazon_url},
+    ]
+    stylevana_verdict = {
+        **VALID_VERDICT,
+        "evidence": observed_evidence,
+        "alternative": {
+            "product_name": "Great Widget 100ml on Stylevana",
+            "price": "$11.90",
+            "reason": "Cheaper than submitted listing.",
+            "source_url": stylevana_url,
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+    amazon_verdict = {
+        **VALID_VERDICT,
+        "evidence": observed_evidence,
+        "alternative": {
+            "product_name": "Great Widget 100ml on Amazon",
+            "price": "$7.95",
+            "reason": "Lowest eligible comparable offer.",
+            "source_url": amazon_url,
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+
+    mock_create.side_effect = [
+        make_response(
+            make_tool_block(
+                "fetch_page",
+                {"url": amazon_url},
+                "b1",
+            )
+        ),
+        make_response(
+            make_tool_block(
+                "fetch_page",
+                {"url": stylevana_url},
+                "b2",
+            )
+        ),
+        make_response(make_tool_block("submit_verdict", stylevana_verdict, "b3")),
+        make_response(make_tool_block("submit_verdict", amazon_verdict, "b4")),
+    ]
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = stylevana_page
+
+        result = await run_research_agent(
+            "https://www.amazon.com/great-widget/dp/B000000001",
+            extraction,
+            identity,
+            initial_fetched_page=cached_amazon_page,
+        )
+
+    mock_fetch.assert_called_once_with("https://www.stylevana.com/great-widget.html")
+    assert result.alternative is not None
+    assert result.alternative.price == "$7.95"
+
+    rejection_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    assert "www.amazon.com" in rejection_tool_result
+    assert "$7.95" in rejection_tool_result
+
+
+async def test_duplicate_search_and_fetch_url_only_appears_once_in_offer_table(
+    mock_create, extraction, identity
+):
+    amazon_url = "https://www.amazon.com/great-widget/dp/B000000001"
+    amazon_result = SearchResult(
+        title="Amazon.com: Great Widget",
+        url=amazon_url,
+        snippet="Great Widget 100ml is available for $7.95.",
+        metadata={"source": "tavily", "score": 0.95},
+    )
+    amazon_page = FetchedPage(
+        url=amazon_url,
+        title="Great Widget 100ml on Amazon",
+        content="Great Widget 100ml for $7.95.",
+        price_guess="$7.95",
+    )
+    stylevana_page = FetchedPage(
+        url="https://www.stylevana.com/great-widget.html",
+        title="Great Widget 100ml on Stylevana",
+        content="Great Widget 100ml for $11.90.",
+        price_guess="$11.90",
+    )
+    stylevana_verdict = {
+        **VALID_VERDICT,
+        "alternative": {
+            "product_name": "Great Widget 100ml on Stylevana",
+            "price": "$11.90",
+            "reason": "Cheaper than submitted listing.",
+            "source_url": "https://www.stylevana.com/great-widget.html",
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+    amazon_verdict = {
+        **VALID_VERDICT,
+        "alternative": {
+            "product_name": "Great Widget 100ml on Amazon",
+            "price": "$7.95",
+            "reason": "Lowest eligible comparable offer.",
+            "source_url": amazon_url,
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "Great Widget Amazon"}, "b1")),
+        make_response(make_tool_block("fetch_page", {"url": amazon_url}, "b2")),
+        make_response(
+            make_tool_block(
+                "fetch_page",
+                {"url": "https://www.stylevana.com/great-widget.html"},
+                "b3",
+            )
+        ),
+        make_response(make_tool_block("submit_verdict", stylevana_verdict, "b4")),
+        make_response(make_tool_block("submit_verdict", amazon_verdict, "b5")),
+    ]
+
+    async def fake_fetch(url: str) -> FetchedPage:
+        if url == amazon_url:
+            return amazon_page
+        return stylevana_page
+
+    with (
+        patch("app.agent.search_web", new_callable=AsyncMock) as mock_search,
+        patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch,
+    ):
+        mock_search.return_value = [amazon_result]
+        mock_fetch.side_effect = fake_fetch
+
+        result = await run_research_agent(
+            "https://example.com/product",
+            extraction,
+            identity,
+        )
+
+    assert result.alternative is not None
+    assert result.alternative.price == "$7.95"
+
+    rejection_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    # The rejection text also mentions www.amazon.com in the reason sentence, so count
+    # only in the offer table section (before the guidance line).
+    offer_table_section = rejection_tool_result.split("If recommending")[0]
+    assert offer_table_section.count("www.amazon.com") == 1
+    assert "$7.95" in rejection_tool_result
 
 
 async def test_tool_errors_are_returned_as_tool_results(mock_create, extraction, identity):

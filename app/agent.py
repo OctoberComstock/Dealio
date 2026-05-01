@@ -16,6 +16,7 @@ from app.tools.normalize_url import fetch_page_cache_key, normalize_url
 from app.tools.offer_candidates import (
     OfferCandidate,
     candidate_from_page,
+    candidate_from_search_result,
     format_offer_table,
     is_same_size,
     parse_price_amount,
@@ -40,6 +41,32 @@ def _observe_url(url: str, seen_urls: set[str]) -> None:
         seen_urls.add(normalize_url(url))
     except ValueError:
         pass
+
+def _candidate_key(candidate: OfferCandidate) -> str:
+    try:
+        return normalize_url(candidate.source_url)
+    except ValueError:
+        return candidate.source_url.strip()
+    
+def _add_offer_candidate(
+    candidates: list[OfferCandidate],
+    candidate: OfferCandidate | None,
+) -> None:
+    if candidate is None or candidate.price_amount is None:
+        return
+
+    new_key = _candidate_key(candidate)
+
+    for index, existing in enumerate(candidates):
+        if _candidate_key(existing) != new_key:
+            continue
+
+        # Prefer fetched pages over search snippets when both describe the same URL.
+        if existing.source_type == "search_result" and candidate.source_type == "fetched_page":
+            candidates[index] = candidate
+        return
+
+    candidates.append(candidate)
 
 
 def _url_was_observed(url: str, seen_urls: set[str]) -> bool:
@@ -160,6 +187,7 @@ async def _execute_tool(
             results = await search_web(query)
             for result in results:
                 _observe_url(str(result.url), seen_urls)
+                _add_offer_candidate(candidates, candidate_from_search_result(result))
             logger.info(
                 "search_web: query=%r results=%d searches_remaining=%d",
                 query,
@@ -183,6 +211,7 @@ async def _execute_tool(
                 logger.info("fetch_page cache hit for initial submitted URL: url=%r", url)
                 _observe_url(url, seen_urls)
                 _observe_url(initial_fetched_page.url, seen_urls)
+                _add_offer_candidate(candidates, candidate_from_page(initial_fetched_page))
                 return _format_fetched_page(initial_fetched_page)
 
         if budget.fetches_remaining <= 0:
@@ -193,13 +222,13 @@ async def _execute_tool(
                 "Fetch budget exhausted. You have reached the maximum number of page fetches. "
                 "Call submit_verdict with the evidence gathered so far."
             )
-        # Decrement before executing so malformed or failed calls still consume budget.
+
         budget.fetches_remaining -= 1
         logger.info("fetch_page: url=%r fetches_remaining=%d", url, budget.fetches_remaining)
         try:
             page = await fetch_page(url)
             _observe_url(page.url, seen_urls)
-            candidates.append(candidate_from_page(page))
+            _add_offer_candidate(candidates, candidate_from_page(page))
             return _format_fetched_page(page)
         except ValueError as exc:
             logger.warning("fetch_page failed: url=%r error=%s", url, exc)
