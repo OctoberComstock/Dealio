@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.schemas import Confidence, EvidenceItem, ResearchResult, Verdict
+from app.tools.extract_product import ProductExtractionResult, ProductPageExtraction
 
 FAKE_RUN_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 FAKE_CHECKED_AT = datetime.now(timezone.utc)
@@ -24,6 +25,15 @@ FAKE_RESULT = ResearchResult(
     ],
     alternative=None,
     last_checked=FAKE_CHECKED_AT,
+)
+
+FAKE_EXTRACTION_RESULT = ProductExtractionResult(
+    extraction=ProductPageExtraction(
+        product_name="Test Widget",
+        listed_price="$29.99",
+        merchant="example.com",
+    ),
+    fetched_page=None,
 )
 
 FAKE_RUN_DATA = {
@@ -104,12 +114,7 @@ async def test_submit_valid_url_redirects_immediately(client):
             return_value=FAKE_RUN_ID,
         ),
         patch(
-            "app.routers.pages.run_research_agent",
-            new_callable=AsyncMock,
-            return_value=FAKE_RESULT,
-        ),
-        patch(
-            "app.routers.pages.complete_research_run",
+            "app.routers.pages._run_research_in_background",
             new_callable=AsyncMock,
         ),
     ):
@@ -132,6 +137,11 @@ async def test_submit_creates_run_before_agent_executes(client):
 
     with (
         patch("app.routers.pages.create_research_run", side_effect=mock_create),
+        patch(
+            "app.routers.pages.extract_product",
+            new_callable=AsyncMock,
+            return_value=FAKE_EXTRACTION_RESULT,
+        ),
         patch("app.routers.pages.run_research_agent", side_effect=mock_agent),
         patch("app.routers.pages.complete_research_run", new_callable=AsyncMock),
     ):
@@ -148,6 +158,11 @@ async def test_submit_valid_url_strips_tracking_params_before_agent(client):
             "app.routers.pages.create_research_run",
             new_callable=AsyncMock,
             return_value=FAKE_RUN_ID,
+        ),
+        patch(
+            "app.routers.pages.extract_product",
+            new_callable=AsyncMock,
+            return_value=FAKE_EXTRACTION_RESULT,
         ),
         patch("app.routers.pages.run_research_agent", mock_agent),
         patch("app.routers.pages.complete_research_run", new_callable=AsyncMock),
@@ -167,6 +182,11 @@ async def test_submit_agent_failure_marks_run_as_failed(client):
             return_value=FAKE_RUN_ID,
         ),
         patch(
+            "app.routers.pages.extract_product",
+            new_callable=AsyncMock,
+            return_value=FAKE_EXTRACTION_RESULT,
+        ),
+        patch(
             "app.routers.pages.run_research_agent",
             new_callable=AsyncMock,
             side_effect=Exception("API down"),
@@ -178,27 +198,7 @@ async def test_submit_agent_failure_marks_run_as_failed(client):
     mock_fail.assert_awaited_once_with(ANY, FAKE_RUN_ID, ANY)
 
 
-async def test_submit_agent_failure_still_redirects(client):
-    url = "https://www.amazon.com/dp/B08N5WRWNW"
-    with (
-        patch(
-            "app.routers.pages.create_research_run",
-            new_callable=AsyncMock,
-            return_value=FAKE_RUN_ID,
-        ),
-        patch(
-            "app.routers.pages.run_research_agent",
-            new_callable=AsyncMock,
-            side_effect=Exception("API down"),
-        ),
-        patch("app.routers.pages.mark_research_run_failed", new_callable=AsyncMock),
-    ):
-        response = await client.post("/", data={"product_url": url})
-    assert response.status_code == 303
-    assert response.headers["location"] == f"/result/{FAKE_RUN_ID}"
-
-
-async def test_submit_extraction_failure_returns_error_page(client):
+async def test_submit_create_run_failure_returns_error_page(client):
     url = "https://www.amazon.com/dp/B08N5WRWNW"
     with patch(
         "app.routers.pages.create_research_run",

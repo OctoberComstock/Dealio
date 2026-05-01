@@ -16,10 +16,9 @@ from app.database import (
     mark_research_run_failed,
 )
 from app.schemas import ResearchResult
-from app.tools.extract_product import ProductPageExtraction, extract_product
-from app.tools.fetch_page import FetchedPage
+from app.tools.extract_product import extract_product
 from app.tools.normalize_url import normalize_url
-from app.tools.product_identity import ProductIdentity, infer_product_identity
+from app.tools.product_identity import infer_product_identity
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -43,15 +42,23 @@ def _validate_product_url(raw_url: str) -> str | None:
     return None
 
 
-async def _run_research_in_background(
-    run_id: str,
-    normalized: str,
-    extraction: ProductPageExtraction,
-    identity: ProductIdentity,
-    fetched_page: FetchedPage | None,
-    t_start: float,
-) -> None:
+async def _run_research_in_background(run_id: str, normalized: str) -> None:
+    t_start = time.perf_counter()
+    logger.info("Background research starting: run_id=%s url=%s", run_id, normalized)
     try:
+        extraction_result = await extract_product(normalized)
+        extraction = extraction_result.extraction
+        fetched_page = extraction_result.fetched_page
+        identity = infer_product_identity(extraction, normalized)
+        logger.info(
+            "Product extracted: name=%r price=%r merchant=%r identity=%r source=%s",
+            extraction.product_name,
+            extraction.listed_price,
+            extraction.merchant,
+            identity.value,
+            identity.source,
+        )
+
         result = await run_research_agent(
             normalized, extraction, identity, initial_fetched_page=fetched_page
         )
@@ -100,22 +107,6 @@ async def submit_product_url(
 
     try:
         normalized = normalize_url(product_url.strip())
-        t_start = time.perf_counter()
-        logger.info("Research starting: url=%s", normalized)
-
-        extraction_result = await extract_product(normalized)
-        extraction = extraction_result.extraction
-        fetched_page = extraction_result.fetched_page
-        identity = infer_product_identity(extraction, normalized)
-        logger.info(
-            "Product extracted: name=%r price=%r merchant=%r identity=%r source=%s",
-            extraction.product_name,
-            extraction.listed_price,
-            extraction.merchant,
-            identity.value,
-            identity.source,
-        )
-
         run_id = await create_research_run(settings.database_path, normalized)
     except Exception:
         logger.exception("Submit failed for URL: %s", product_url)
@@ -129,15 +120,8 @@ async def submit_product_url(
             status_code=500,
         )
 
-    background_tasks.add_task(
-        _run_research_in_background,
-        run_id,
-        normalized,
-        extraction,
-        identity,
-        fetched_page,
-        t_start,
-    )
+    logger.info("Research submitted: run_id=%s url=%s", run_id, normalized)
+    background_tasks.add_task(_run_research_in_background, run_id, normalized)
     return RedirectResponse(url=f"/result/{run_id}", status_code=303)
 
 
