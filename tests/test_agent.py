@@ -500,15 +500,26 @@ async def test_fetch_budget_exhaustion_does_not_execute_extra_fetches(
     assert isinstance(result, ResearchResult)
 
 
-async def test_runtime_timeout_falls_back_to_insufficient_data(extraction, identity):
+async def test_runtime_timeout_returns_failed_verdict(extraction, identity):
     def raise_timeout(coro, **kwargs):
         coro.close()
         raise asyncio.TimeoutError()
 
     with patch("asyncio.wait_for", side_effect=raise_timeout):
         result = await run_research_agent("https://example.com/product", extraction, identity)
-    assert result.verdict.value == "insufficient_data"
+    assert result.verdict.value == "failed"
     assert isinstance(result, ResearchResult)
+
+
+async def test_runtime_timeout_result_has_user_safe_retry_message(extraction, identity):
+    def raise_timeout(coro, **kwargs):
+        coro.close()
+        raise asyncio.TimeoutError()
+
+    with patch("asyncio.wait_for", side_effect=raise_timeout):
+        result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert "timed out" in result.summary.lower()
+    assert "try again" in result.summary.lower()
 
 
 async def test_anthropic_rate_limit_error_falls_back_to_insufficient_data(

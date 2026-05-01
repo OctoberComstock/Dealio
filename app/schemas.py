@@ -9,6 +9,7 @@ class Verdict(str, Enum):
     fair = "fair"
     overpriced = "overpriced"
     insufficient_data = "insufficient_data"
+    failed = "failed"
 
 
 class Confidence(str, Enum):
