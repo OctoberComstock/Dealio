@@ -283,6 +283,29 @@ def _validate_verdict_rules(verdict_input: dict, seen_urls: set[str]) -> None:
             )
 
 
+def _build_timeout_result(
+    extraction: ProductPageExtraction,
+    identity: ProductIdentity,
+) -> ResearchResult:
+    identity_name = identity.value if identity.source != "insufficient_data" else None
+    product_name = identity_name or extraction.product_name or "unknown"
+    merchant = extraction.merchant or "unknown"
+    return ResearchResult(
+        product_name=product_name,
+        merchant=merchant,
+        listed_price=extraction.listed_price,
+        verdict="failed",
+        confidence="low",
+        summary=(
+            "Research timed out before a verdict could be reached. "
+            "Please try again — results may vary based on current page load times."
+        ),
+        evidence=[],
+        alternative=None,
+        last_checked=datetime.now(timezone.utc),
+    )
+
+
 def _build_fallback_result(
     verdict_input: dict,
     extraction: ProductPageExtraction,
@@ -503,10 +526,10 @@ async def run_research_agent(
         )
     except asyncio.TimeoutError:
         logger.warning(
-            "Agent timed out after %d seconds, returning insufficient_data",
+            "Agent timed out after %d seconds, returning failed",
             settings.agent_timeout_seconds,
         )
-        return _build_fallback_result({}, extraction, identity)
+        return _build_timeout_result(extraction, identity)
     except anthropic.APIError as exc:
         logger.warning(
             "Anthropic API error (%s), returning insufficient_data: %s",

@@ -213,7 +213,7 @@ async def test_fetch_page_cache_hit_does_not_decrement_budget(mock_create, extra
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 8
         mock_settings.max_fetched_pages = 1
-        mock_settings.agent_timeout_seconds = 60
+        mock_settings.agent_timeout_seconds = 120
         with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = other_page
             result = await run_research_agent(
@@ -443,7 +443,7 @@ async def test_search_budget_exhaustion_does_not_execute_extra_searches(
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 1
         mock_settings.max_fetched_pages = 8
-        mock_settings.agent_timeout_seconds = 60
+        mock_settings.agent_timeout_seconds = 120
         mock_create.side_effect = [
             make_response(make_tool_block("search_web", {"query": "s1"}, "b1")),
             make_response(make_tool_block("search_web", {"query": "s2"}, "b2")),
@@ -462,7 +462,7 @@ async def test_search_budget_exhaustion_returns_submit_verdict_guidance(
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 1
         mock_settings.max_fetched_pages = 8
-        mock_settings.agent_timeout_seconds = 60
+        mock_settings.agent_timeout_seconds = 120
         mock_create.side_effect = [
             make_response(make_tool_block("search_web", {"query": "s1"}, "b1")),
             make_response(make_tool_block("search_web", {"query": "s2"}, "b2")),
@@ -482,7 +482,7 @@ async def test_fetch_budget_exhaustion_does_not_execute_extra_fetches(
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 8
         mock_settings.max_fetched_pages = 1
-        mock_settings.agent_timeout_seconds = 60
+        mock_settings.agent_timeout_seconds = 120
         mock_create.side_effect = [
             make_response(make_tool_block("fetch_page", {"url": "https://example.com/p1"}, "b1")),
             make_response(make_tool_block("fetch_page", {"url": "https://example.com/p2"}, "b2")),
@@ -500,15 +500,26 @@ async def test_fetch_budget_exhaustion_does_not_execute_extra_fetches(
     assert isinstance(result, ResearchResult)
 
 
-async def test_runtime_timeout_falls_back_to_insufficient_data(extraction, identity):
+async def test_runtime_timeout_returns_failed_verdict(extraction, identity):
     def raise_timeout(coro, **kwargs):
         coro.close()
         raise asyncio.TimeoutError()
 
     with patch("asyncio.wait_for", side_effect=raise_timeout):
         result = await run_research_agent("https://example.com/product", extraction, identity)
-    assert result.verdict.value == "insufficient_data"
+    assert result.verdict.value == "failed"
     assert isinstance(result, ResearchResult)
+
+
+async def test_runtime_timeout_result_has_user_safe_retry_message(extraction, identity):
+    def raise_timeout(coro, **kwargs):
+        coro.close()
+        raise asyncio.TimeoutError()
+
+    with patch("asyncio.wait_for", side_effect=raise_timeout):
+        result = await run_research_agent("https://example.com/product", extraction, identity)
+    assert "timed out" in result.summary.lower()
+    assert "try again" in result.summary.lower()
 
 
 async def test_anthropic_rate_limit_error_falls_back_to_insufficient_data(
