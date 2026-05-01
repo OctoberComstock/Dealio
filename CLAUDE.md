@@ -82,6 +82,7 @@ Style preference:
 - Once I confirm the branch has been pushed, create the pull request with `gh pr create`.
 - Do not create the pull request before I confirm the branch is pushed.
 - For git commands, assume the shell is already in the project root unless there is evidence otherwise. Use normal commands like `git status`, `git add ...`, and `git commit -m ...`; avoid `git -C /absolute/path ...` unless the working directory is unknown or wrong.
+- Before starting work, make sure you create the git branch for said work first.
 
 ## Pull request convention
 - PR titles must use the format `TICKET-ID: Descriptive title`, where the ticket ID is uppercase and followed by a colon, for example: `ROK-10: Scaffold FastAPI app and basic project structure`.
