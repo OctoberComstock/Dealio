@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.schemas import Confidence, EvidenceItem, ResearchResult, Verdict
+from app.tools.extract_product import ProductExtractionResult, ProductPageExtraction
 
 FAKE_RUN_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 FAKE_CHECKED_AT = datetime.now(timezone.utc)
@@ -26,11 +27,37 @@ FAKE_RESULT = ResearchResult(
     last_checked=FAKE_CHECKED_AT,
 )
 
+FAKE_EXTRACTION_RESULT = ProductExtractionResult(
+    extraction=ProductPageExtraction(
+        product_name="Test Widget",
+        listed_price="$29.99",
+        merchant="example.com",
+    ),
+    fetched_page=None,
+)
+
 FAKE_RUN_DATA = {
     "id": FAKE_RUN_ID,
     "status": "completed",
     "result_payload": FAKE_RESULT.model_dump(mode="json"),
     "checked_at": FAKE_CHECKED_AT.isoformat(),
+    "failure_reason": None,
+}
+
+FAKE_RUN_DATA_RUNNING = {
+    "id": FAKE_RUN_ID,
+    "status": "running",
+    "result_payload": None,
+    "checked_at": None,
+    "failure_reason": None,
+}
+
+FAKE_RUN_DATA_FAILED = {
+    "id": FAKE_RUN_ID,
+    "status": "failed",
+    "result_payload": None,
+    "checked_at": None,
+    "failure_reason": "Something went wrong while researching this product. Please try again.",
 }
 
 
@@ -78,7 +105,7 @@ async def test_submit_invalid_url_preserves_input(client):
     assert bad_url in response.text
 
 
-async def test_submit_valid_url_runs_research_and_redirects(client):
+async def test_submit_valid_url_redirects_immediately(client):
     url = "https://www.amazon.com/dp/B08N5WRWNW"
     with (
         patch(
@@ -87,12 +114,7 @@ async def test_submit_valid_url_runs_research_and_redirects(client):
             return_value=FAKE_RUN_ID,
         ),
         patch(
-            "app.routers.pages.run_research_agent",
-            new_callable=AsyncMock,
-            return_value=FAKE_RESULT,
-        ),
-        patch(
-            "app.routers.pages.complete_research_run",
+            "app.routers.pages._run_research_in_background",
             new_callable=AsyncMock,
         ),
     ):
@@ -115,6 +137,11 @@ async def test_submit_creates_run_before_agent_executes(client):
 
     with (
         patch("app.routers.pages.create_research_run", side_effect=mock_create),
+        patch(
+            "app.routers.pages.extract_product",
+            new_callable=AsyncMock,
+            return_value=FAKE_EXTRACTION_RESULT,
+        ),
         patch("app.routers.pages.run_research_agent", side_effect=mock_agent),
         patch("app.routers.pages.complete_research_run", new_callable=AsyncMock),
     ):
@@ -132,33 +159,17 @@ async def test_submit_valid_url_strips_tracking_params_before_agent(client):
             new_callable=AsyncMock,
             return_value=FAKE_RUN_ID,
         ),
+        patch(
+            "app.routers.pages.extract_product",
+            new_callable=AsyncMock,
+            return_value=FAKE_EXTRACTION_RESULT,
+        ),
         patch("app.routers.pages.run_research_agent", mock_agent),
         patch("app.routers.pages.complete_research_run", new_callable=AsyncMock),
     ):
         await client.post("/", data={"product_url": url})
     called_url = mock_agent.call_args[0][0]
     assert "utm_source" not in called_url
-
-
-async def test_submit_research_failure_rerenders_homepage_with_error(client):
-    url = "https://www.amazon.com/dp/B08N5WRWNW"
-    with (
-        patch(
-            "app.routers.pages.create_research_run",
-            new_callable=AsyncMock,
-            return_value=FAKE_RUN_ID,
-        ),
-        patch(
-            "app.routers.pages.run_research_agent",
-            new_callable=AsyncMock,
-            side_effect=Exception("API down"),
-        ),
-        patch("app.routers.pages.mark_research_run_failed", new_callable=AsyncMock),
-    ):
-        response = await client.post("/", data={"product_url": url})
-    assert response.status_code == 500
-    assert "went wrong" in response.text.lower()
-    assert 'name="product_url"' in response.text
 
 
 async def test_submit_agent_failure_marks_run_as_failed(client):
@@ -171,17 +182,35 @@ async def test_submit_agent_failure_marks_run_as_failed(client):
             return_value=FAKE_RUN_ID,
         ),
         patch(
+            "app.routers.pages.extract_product",
+            new_callable=AsyncMock,
+            return_value=FAKE_EXTRACTION_RESULT,
+        ),
+        patch(
             "app.routers.pages.run_research_agent",
             new_callable=AsyncMock,
             side_effect=Exception("API down"),
         ),
         patch("app.routers.pages.mark_research_run_failed", mock_fail),
     ):
-        await client.post("/", data={"product_url": url})
-    mock_fail.assert_awaited_once_with(ANY, FAKE_RUN_ID)
+        response = await client.post("/", data={"product_url": url})
+    assert response.status_code == 303
+    mock_fail.assert_awaited_once_with(ANY, FAKE_RUN_ID, ANY)
 
 
-async def test_result_page_renders_for_known_run(client):
+async def test_submit_create_run_failure_returns_error_page(client):
+    url = "https://www.amazon.com/dp/B08N5WRWNW"
+    with patch(
+        "app.routers.pages.create_research_run",
+        new_callable=AsyncMock,
+        side_effect=Exception("DB down"),
+    ):
+        response = await client.post("/", data={"product_url": url})
+    assert response.status_code == 500
+    assert "went wrong" in response.text.lower()
+
+
+async def test_result_page_renders_for_completed_run(client):
     with patch(
         "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=FAKE_RUN_DATA
     ):
@@ -249,6 +278,7 @@ async def test_result_page_uses_checked_at_not_payload_last_checked(client):
             "last_checked": payload_last_checked.isoformat(),
         },
         "checked_at": checked_at.isoformat(),
+        "failure_reason": None,
     }
     with patch(
         "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=run_data
@@ -266,15 +296,23 @@ async def test_result_page_returns_404_for_missing_run(client):
     assert response.status_code == 404
 
 
-async def test_result_page_returns_404_for_run_without_result(client):
-    run_data = {
-        "id": FAKE_RUN_ID,
-        "status": "running",
-        "result_payload": None,
-        "checked_at": None,
-    }
+async def test_result_page_renders_loading_for_running_run(client):
     with patch(
-        "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=run_data
+        "app.routers.pages.load_research_run",
+        new_callable=AsyncMock,
+        return_value=FAKE_RUN_DATA_RUNNING,
     ):
         response = await client.get(f"/result/{FAKE_RUN_ID}")
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert "progress" in response.text.lower() or "researching" in response.text.lower()
+
+
+async def test_result_page_renders_error_for_failed_run(client):
+    with patch(
+        "app.routers.pages.load_research_run",
+        new_callable=AsyncMock,
+        return_value=FAKE_RUN_DATA_FAILED,
+    ):
+        response = await client.get(f"/result/{FAKE_RUN_ID}")
+    assert response.status_code == 200
+    assert FAKE_RUN_DATA_FAILED["failure_reason"] in response.text

@@ -126,16 +126,27 @@ async def test_complete_research_run_stores_checked_at(db_path):
 
 async def test_mark_research_run_failed_sets_status_failed(db_path):
     run_id = await create_research_run(db_path, "https://example.com/product")
-    await mark_research_run_failed(db_path, run_id)
+    await mark_research_run_failed(db_path, run_id, "Something went wrong.")
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute("SELECT status FROM research_runs WHERE id = ?", (run_id,))
         row = await cursor.fetchone()
     assert row[0] == "failed"
 
 
+async def test_mark_research_run_failed_stores_failure_reason(db_path):
+    run_id = await create_research_run(db_path, "https://example.com/product")
+    await mark_research_run_failed(db_path, run_id, "Research timed out.")
+    async with aiosqlite.connect(db_path) as db:
+        cursor = await db.execute(
+            "SELECT failure_reason FROM research_runs WHERE id = ?", (run_id,)
+        )
+        row = await cursor.fetchone()
+    assert row[0] == "Research timed out."
+
+
 async def test_mark_research_run_failed_preserves_null_result_payload(db_path):
     run_id = await create_research_run(db_path, "https://example.com/product")
-    await mark_research_run_failed(db_path, run_id)
+    await mark_research_run_failed(db_path, run_id, "Something went wrong.")
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute(
             "SELECT result_payload FROM research_runs WHERE id = ?", (run_id,)
@@ -155,6 +166,22 @@ async def test_load_research_run_returns_status(db_path):
     run = await load_research_run(db_path, run_id)
     assert run is not None
     assert run["status"] == "completed"
+
+
+async def test_load_research_run_returns_failure_reason(db_path):
+    run_id = await create_research_run(db_path, "https://example.com/product")
+    await mark_research_run_failed(db_path, run_id, "Timed out.")
+    run = await load_research_run(db_path, run_id)
+    assert run is not None
+    assert run["failure_reason"] == "Timed out."
+
+
+async def test_load_research_run_returns_null_failure_reason_for_completed(db_path):
+    run_id = await create_research_run(db_path, "https://example.com/product")
+    await complete_research_run(db_path, run_id, {"verdict": "good_deal"}, CHECKED_AT)
+    run = await load_research_run(db_path, run_id)
+    assert run is not None
+    assert run["failure_reason"] is None
 
 
 async def test_load_research_run_returns_running_status_before_completion(db_path):
@@ -245,6 +272,36 @@ async def test_init_db_migrates_old_schema_to_add_status(tmp_path):
     assert row[0] == "existing-id"
     assert row[1] == "completed"
     assert json.loads(row[2]) == {"verdict": "good_deal"}
+
+
+async def test_init_db_migrates_existing_schema_to_add_failure_reason(tmp_path):
+    db_path = str(tmp_path / "no_failure_reason.db")
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("""
+            CREATE TABLE research_runs (
+                id TEXT PRIMARY KEY,
+                normalized_url TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'running',
+                result_payload TEXT,
+                checked_at TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+        await db.execute(
+            """
+            INSERT INTO research_runs (id, normalized_url, status, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("existing-id", "https://example.com/product", "completed", CHECKED_AT.isoformat()),
+        )
+        await db.commit()
+
+    await init_db(db_path)
+
+    async with aiosqlite.connect(db_path) as db:
+        cursor = await db.execute("PRAGMA table_info(research_runs)")
+        columns = {row[1] for row in await cursor.fetchall()}
+    assert "failure_reason" in columns
 
 
 async def test_save_cache_artifact_returns_uuid(db_path):

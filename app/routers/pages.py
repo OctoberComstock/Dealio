@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import datetime
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import HttpUrl, TypeAdapter, ValidationError
@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 
 _url_validator = TypeAdapter(HttpUrl)
 
+_RESEARCH_FAILURE_MESSAGE = (
+    "Something went wrong while researching this product. Please try again."
+)
+
 
 def _validate_product_url(raw_url: str) -> str | None:
     stripped = raw_url.strip()
@@ -38,28 +42,10 @@ def _validate_product_url(raw_url: str) -> str | None:
     return None
 
 
-@router.get("/", response_class=HTMLResponse)
-async def homepage(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
-
-
-@router.post("/", response_class=HTMLResponse)
-async def submit_product_url(request: Request, product_url: str = Form(default="")):
-    error = _validate_product_url(product_url)
-    if error is not None:
-        return templates.TemplateResponse(
-            request=request,
-            name="index.html",
-            context={"error": error, "submitted_url": product_url},
-            status_code=422,
-        )
-
-    run_id: str | None = None
+async def _run_research_in_background(run_id: str, normalized: str) -> None:
+    t_start = time.perf_counter()
+    logger.info("Background research starting: run_id=%s url=%s", run_id, normalized)
     try:
-        normalized = normalize_url(product_url.strip())
-        t_start = time.perf_counter()
-        logger.info("Research starting: url=%s", normalized)
-
         extraction_result = await extract_product(normalized)
         extraction = extraction_result.extraction
         fetched_page = extraction_result.fetched_page
@@ -72,8 +58,6 @@ async def submit_product_url(request: Request, product_url: str = Form(default="
             identity.value,
             identity.source,
         )
-
-        run_id = await create_research_run(settings.database_path, normalized)
 
         result = await run_research_agent(
             normalized, extraction, identity, initial_fetched_page=fetched_page
@@ -93,9 +77,39 @@ async def submit_product_url(request: Request, product_url: str = Form(default="
             normalized,
         )
     except Exception:
-        logger.exception("Research flow failed for URL: %s", product_url)
-        if run_id is not None:
-            await mark_research_run_failed(settings.database_path, run_id)
+        logger.exception("Background research failed: run_id=%s url=%s", run_id, normalized)
+        await mark_research_run_failed(
+            settings.database_path,
+            run_id,
+            _RESEARCH_FAILURE_MESSAGE,
+        )
+
+
+@router.get("/", response_class=HTMLResponse)
+async def homepage(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html")
+
+
+@router.post("/", response_class=HTMLResponse)
+async def submit_product_url(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    product_url: str = Form(default=""),
+):
+    error = _validate_product_url(product_url)
+    if error is not None:
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context={"error": error, "submitted_url": product_url},
+            status_code=422,
+        )
+
+    try:
+        normalized = normalize_url(product_url.strip())
+        run_id = await create_research_run(settings.database_path, normalized)
+    except Exception:
+        logger.exception("Submit failed for URL: %s", product_url)
         return templates.TemplateResponse(
             request=request,
             name="index.html",
@@ -106,14 +120,28 @@ async def submit_product_url(request: Request, product_url: str = Form(default="
             status_code=500,
         )
 
+    logger.info("Research submitted: run_id=%s url=%s", run_id, normalized)
+    background_tasks.add_task(_run_research_in_background, run_id, normalized)
     return RedirectResponse(url=f"/result/{run_id}", status_code=303)
 
 
 @router.get("/result/{run_id}", response_class=HTMLResponse)
 async def result_page(request: Request, run_id: str):
     run = await load_research_run(settings.database_path, run_id)
-    if run is None or run["result_payload"] is None:
+    if run is None:
         raise HTTPException(status_code=404, detail="Result not found")
+
+    if run["status"] in ("running", "failed"):
+        return templates.TemplateResponse(
+            request=request,
+            name="loading.html",
+            context={
+                "run_id": run_id,
+                "status": run["status"],
+                "failure_reason": run["failure_reason"],
+            },
+        )
+
     result = ResearchResult.model_validate(run["result_payload"])
     checked_at = datetime.fromisoformat(run["checked_at"])
     return templates.TemplateResponse(

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<main>
+    {% if status == "failed" %}
+    <h1>Research failed</h1>
+    <p>{{ failure_reason or "Something went wrong. Please try again." }}</p>
+    <a href="/">← Try another product</a>
+    {% else %}
+    <h1>Researching&hellip;</h1>
+    <p>Your agent is checking for the best deal! This can take up to 2 minutes, please check back in a moment.</p>
+    <p><a href="/result/{{ run_id }}">Refresh</a></p>
+    {% endif %}
+</main>
+{% endblock %}
