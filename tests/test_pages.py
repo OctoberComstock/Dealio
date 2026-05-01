@@ -275,7 +275,7 @@ async def test_loading_page_renders_for_running_run(client):
     ):
         response = await client.get(f"/research/{FAKE_RUN_ID}/loading")
     assert response.status_code == 200
-    assert "agent" in response.text.lower()
+    assert "research" in response.text.lower()
 
 
 async def test_loading_page_displays_progress_steps(client):
@@ -299,7 +299,7 @@ async def test_loading_page_displays_supporting_copy(client):
         return_value=FAKE_RUN_DATA_RUNNING,
     ):
         response = await client.get(f"/research/{FAKE_RUN_ID}/loading")
-    assert "Amazon or Walmart" in response.text
+    assert "marketplace" in response.text.lower()
 
 
 async def test_loading_page_renders_error_for_failed_run(client):

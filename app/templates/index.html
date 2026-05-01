@@ -1,56 +1,138 @@
 {% extends "base.html" %}
 {% block extra_styles %}
 <style>
+    main {
+        max-width: 520px;
+        margin: 6rem auto 4rem;
+    }
+
+    .brand {
+        margin: 0 0 2.5rem;
+    }
+
+    .brand-name {
+        font-size: 2.5rem;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        color: var(--text-primary);
+        margin: 0 0 0.5rem;
+    }
+
+    .brand-tagline {
+        font-size: 1rem;
+        color: var(--text-secondary);
+        margin: 0;
+        line-height: 1.55;
+    }
+
+    .form-card {
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        box-shadow: var(--shadow-md);
+    }
+
+    .url-row {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .url-input {
+        flex: 1;
+        padding: 0.75rem 1.1rem;
+        font-size: 0.95rem;
+        font-family: inherit;
+        color: var(--text-primary);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-pill);
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .url-input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .url-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(94, 123, 101, 0.15);
+    }
+
+    .submit-button {
+        padding: 0.75rem 1.4rem;
+        font-size: 0.95rem;
+        font-family: inherit;
+        font-weight: 600;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius-pill);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s;
+    }
+
+    .submit-button:hover {
+        background: var(--accent-hover);
+    }
+
     .submit-button:disabled {
-        background: #93c5fd;
+        background: #9DB8A1;
         cursor: not-allowed;
     }
 
     .loading-message {
-        color: #555;
-        margin: 0.75rem 0 0;
+        margin: 1rem 0 0;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        text-align: center;
+    }
+
+    [hidden] { display: none !important; }
+
+    .error-message {
+        margin: 1rem 0 0;
+        color: var(--error-text);
         font-size: 0.9rem;
+        text-align: center;
     }
 </style>
 {% endblock %}
 {% block content %}
 <main>
-    <h1>Dealio</h1>
-    <p class="tagline">Paste a product URL to find out if it's a good deal.</p>
-
-    {% if received %}
-    <div class="confirmation">
-        <strong>URL received:</strong><br>
-        <code>{{ submitted_url }}</code>
+    <div class="brand">
+        <h1 class="brand-name">dealio</h1>
+        <p class="brand-tagline">Paste a product URL — we'll research the market and tell you if it's worth it.</p>
     </div>
-    {% else %}
-    <form class="url-form" method="post" action="/">
-        <input
-            class="url-input"
-            type="url"
-            name="product_url"
-            value="{{ submitted_url or '' }}"
-            placeholder="https://www.amazon.com/dp/..."
-            autocomplete="off"
-            autofocus
-        >
-        <button class="submit-button" type="submit">Check deal</button>
-    </form>
-    <p id="loading-message" class="loading-message" hidden>
-        Researching this product — this can take up to 60 seconds.
-    </p>
-    {% if error %}
-    <p class="error-message">{{ error }}</p>
-    {% endif %}
+
+    <div class="form-card">
+        <form class="url-row" id="deal-form" method="post" action="/">
+            <input
+                class="url-input"
+                type="url"
+                name="product_url"
+                value="{{ submitted_url or '' }}"
+                placeholder="https://www.amazon.com/dp/..."
+                autocomplete="off"
+                autofocus
+            >
+            <button class="submit-button" type="submit" id="submit-btn">Check deal</button>
+        </form>
+        <p id="loading-message" class="loading-message" hidden>Researching this product — this can take up to 60 seconds.</p>
+        {% if error %}
+        <p class="error-message">{{ error }}</p>
+        {% endif %}
+    </div>
+
     <script>
-        document.querySelector('.url-form').addEventListener('submit', function () {
-            var btn = this.querySelector('.submit-button');
+        document.getElementById('deal-form').addEventListener('submit', function () {
+            var btn = document.getElementById('submit-btn');
             btn.disabled = true;
             btn.textContent = 'Researching…';
-            this.setAttribute('aria-busy', 'true');
             document.getElementById('loading-message').hidden = false;
         });
     </script>
-    {% endif %}
 </main>
 {% endblock %}

@@ -3,146 +3,207 @@
 <style>
     main {
         max-width: 640px;
+        margin: 3rem auto 5rem;
     }
 
-    .back-link {
-        display: inline-block;
-        margin-bottom: 1.5rem;
-        color: #2563eb;
+    .nav-back {
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 2rem;
+        transition: color 0.1s;
+    }
+
+    .nav-back:hover {
+        color: var(--text-primary);
         text-decoration: none;
-        font-size: 0.9rem;
     }
 
-    .back-link:hover {
-        text-decoration: underline;
+    .product-header {
+        margin: 0 0 1.25rem;
     }
 
     .product-name {
-        font-size: 1.5rem;
-        margin: 0 0 0.25rem;
+        font-size: 1.7rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+        margin: 0 0 0.4rem;
     }
 
     .product-meta {
-        color: #555;
-        margin: 0 0 1.5rem;
+        color: var(--text-secondary);
         font-size: 0.95rem;
+        margin: 0;
     }
 
     .verdict-row {
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        margin-bottom: 1.25rem;
+        flex-wrap: wrap;
+        margin: 0 0 1.25rem;
     }
 
     .verdict-badge {
-        padding: 0.35rem 0.75rem;
-        border-radius: 6px;
-        font-weight: 600;
-        font-size: 0.95rem;
+        display: inline-flex;
+        align-items: center;
+        padding: 0.4rem 0.9rem;
+        border-radius: var(--radius-pill);
+        font-weight: 700;
+        font-size: 0.875rem;
+        border: 1px solid transparent;
     }
 
-    .verdict-badge.good-deal  { background: #dcfce7; color: #166534; }
-    .verdict-badge.fair       { background: #fef9c3; color: #854d0e; }
-    .verdict-badge.overpriced { background: #fee2e2; color: #991b1b; }
-    .verdict-badge.insufficient-data { background: #f3f4f6; color: #374151; }
-    .verdict-badge.failed { background: #fef2f2; color: #991b1b; }
+    .verdict-badge.good-deal {
+        background: var(--good-deal-bg);
+        color: var(--good-deal-text);
+        border-color: var(--good-deal-border);
+    }
+
+    .verdict-badge.fair {
+        background: var(--fair-bg);
+        color: var(--fair-text);
+        border-color: var(--fair-border);
+    }
+
+    .verdict-badge.overpriced {
+        background: var(--overpriced-bg);
+        color: var(--overpriced-text);
+        border-color: var(--overpriced-border);
+    }
+
+    .verdict-badge.insufficient-data {
+        background: #F3EFEA;
+        color: var(--text-secondary);
+        border-color: var(--border);
+    }
+
+    .verdict-badge.failed {
+        background: var(--error-bg);
+        color: var(--error-text);
+        border-color: var(--error-border);
+    }
 
     .confidence-label {
-        color: #555;
-        font-size: 0.9rem;
+        font-size: 0.875rem;
+        color: var(--text-secondary);
     }
 
     .summary {
-        margin: 0 0 1.5rem;
-        line-height: 1.6;
-    }
-
-    .section-heading {
         font-size: 1rem;
-        font-weight: 600;
+        line-height: 1.7;
+        margin: 0 0 2rem;
+    }
+
+    .section-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-muted);
         margin: 0 0 0.75rem;
-    }
-
-    .evidence-list {
-        margin: 0 0 1.5rem;
-        padding: 0;
-        list-style: none;
-    }
-
-    .evidence-item {
-        padding: 0.75rem 0;
-        border-top: 1px solid #e5e7eb;
-        line-height: 1.5;
-        font-size: 0.95rem;
-    }
-
-    .evidence-item:last-child {
-        border-bottom: 1px solid #e5e7eb;
-    }
-
-    .source-link {
-        display: inline-block;
-        margin-left: 0.5rem;
-        color: #2563eb;
-        font-size: 0.8rem;
-        text-decoration: none;
-    }
-
-    .source-link:hover {
-        text-decoration: underline;
     }
 
     .alternative-card {
-        background: #f0f9ff;
-        border: 1px solid #bae6fd;
-        border-radius: 6px;
-        padding: 1rem;
-        margin: 0.5rem 0 1.5rem;
+        background: var(--surface-raised);
+        border: 1.5px solid var(--accent);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem 1.5rem;
+        margin: 0 0 2rem;
+        box-shadow: var(--shadow-sm);
     }
 
     .alt-product-name {
-        font-weight: 600;
-        margin: 0 0 0.25rem;
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin: 0 0 0.3rem;
+        color: var(--text-primary);
     }
 
     .alt-price {
-        color: #555;
         font-size: 0.9rem;
-        margin: 0 0 0.5rem;
+        color: var(--text-secondary);
+        margin: 0 0 0.75rem;
     }
 
     .alt-reason {
-        margin: 0 0 0.75rem;
         font-size: 0.95rem;
-        line-height: 1.5;
+        line-height: 1.6;
+        margin: 0 0 1rem;
     }
 
     .alt-link {
-        color: #2563eb;
-        font-size: 0.9rem;
-        text-decoration: none;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--accent);
     }
 
     .alt-link:hover {
+        color: var(--accent-hover);
         text-decoration: underline;
     }
 
-    .last-checked {
-        margin-top: 2rem;
-        color: #6b7280;
-        font-size: 0.85rem;
+    .evidence-list {
+        list-style: none;
+        margin: 0 0 2rem;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .evidence-item {
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 0.9rem 1.1rem;
+        font-size: 0.925rem;
+        line-height: 1.55;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .evidence-text {
+        flex: 1;
+        color: var(--text-primary);
+    }
+
+    .source-link {
+        flex-shrink: 0;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--accent);
+        white-space: nowrap;
+    }
+
+    .source-link:hover {
+        color: var(--accent-hover);
+        text-decoration: underline;
+    }
+
+    .result-footer {
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border-light);
+        color: var(--text-muted);
+        font-size: 0.825rem;
     }
 </style>
 {% endblock %}
 {% block content %}
 <main>
-    <a href="/" class="back-link">← Check another product</a>
+    <a href="/" class="nav-back">← Check another product</a>
 
-    <h1 class="product-name">{{ result.product_name }}</h1>
-    <p class="product-meta">
-        {{ result.merchant }}{% if result.listed_price %} · {{ result.listed_price }}{% endif %}
-    </p>
+    <div class="product-header">
+        <h1 class="product-name">{{ result.product_name }}</h1>
+        <p class="product-meta">
+            {{ result.merchant }}{% if result.listed_price %} &middot; {{ result.listed_price }}{% endif %}
+        </p>
+    </div>
 
     <div class="verdict-row">
         <span class="verdict-badge {{ result.verdict.value.replace('_', '-') }}">
@@ -153,20 +214,8 @@
 
     <p class="summary">{{ result.summary }}</p>
 
-    {% if result.evidence %}
-    <h2 class="section-heading">Evidence</h2>
-    <ul class="evidence-list">
-        {% for item in result.evidence %}
-        <li class="evidence-item">
-            {{ item.text }}
-            <a class="source-link" href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">source ↗</a>
-        </li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-
     {% if result.alternative %}
-    <h2 class="section-heading">Consider instead</h2>
+    <p class="section-label">Recommended alternative</p>
     <div class="alternative-card">
         <p class="alt-product-name">{{ result.alternative.product_name }}</p>
         {% if result.alternative.price %}
@@ -177,6 +226,20 @@
     </div>
     {% endif %}
 
-    <p class="last-checked">Checked {{ checked_at.strftime('%-d %B %Y at %H:%M UTC') }}</p>
+    {% if result.evidence %}
+    <p class="section-label">Research findings</p>
+    <ul class="evidence-list">
+        {% for item in result.evidence %}
+        <li class="evidence-item">
+            <span class="evidence-text">{{ item.text }}</span>
+            <a class="source-link" href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">source ↗</a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="result-footer">
+        Checked {{ checked_at.strftime('%-d %B %Y at %H:%M UTC') }}
+    </div>
 </main>
 {% endblock %}
