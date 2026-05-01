@@ -995,6 +995,170 @@ async def test_invalid_evidence_still_falls_back_despite_valid_alternative(
     assert result.verdict.value == "insufficient_data"
 
 
+# --- Offer candidate ranking and best-alternative validation tests ---
+
+
+def _make_fetched_page(url: str, title: str, price: str | None) -> FetchedPage:
+    return FetchedPage(url=url, title=title, content="...", price_guess=price)
+
+
+def _make_alternative(source_url: str, price: str) -> dict:
+    return {
+        "product_name": "Test Product",
+        "price": price,
+        "reason": "Cheaper option",
+        "source_url": source_url,
+        "is_cheaper": True,
+        "is_better_reviewed": False,
+    }
+
+
+def _verdict_with_evidence_and_alternative(alternative: dict | None, urls: list[str]) -> dict:
+    evidence = [
+        {"text": f"Price confirmed at source {i + 1}.", "source_url": url}
+        for i, url in enumerate(urls[:3])
+    ]
+    return {
+        **VALID_VERDICT,
+        "evidence": evidence,
+        "alternative": alternative,
+    }
+
+
+@pytest.mark.asyncio
+async def test_walmart_alternative_rejected_when_amazon_is_cheaper(mock_create, extraction):
+    amazon_url = "https://www.amazon.com/cleanser"
+    walmart_url = "https://www.walmart.com/cleanser"
+    submitted_url = "https://example.com/product"
+    identity = ProductIdentity(value="Great Widget", source="product_name")
+
+    amazon_page = _make_fetched_page(amazon_url, "Great Widget", "$7.95")
+    walmart_page = _make_fetched_page(walmart_url, "Great Widget", "$13.59")
+
+    evidence_urls = [amazon_url, walmart_url, submitted_url]
+    verdict_walmart = _verdict_with_evidence_and_alternative(
+        _make_alternative(walmart_url, "$13.59"), evidence_urls
+    )
+    verdict_amazon = _verdict_with_evidence_and_alternative(
+        _make_alternative(amazon_url, "$7.95"), evidence_urls
+    )
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": amazon_url}, "b1")),
+        make_response(make_tool_block("fetch_page", {"url": walmart_url}, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_walmart, "b3")),
+        make_response(make_tool_block("submit_verdict", verdict_amazon, "b4")),
+    ]
+
+    def fetch_side_effect(url):
+        return amazon_page if "amazon" in url else walmart_page
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.side_effect = fetch_side_effect
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.alternative is not None
+    assert "amazon" in str(result.alternative.source_url).lower()
+
+
+@pytest.mark.asyncio
+async def test_wrong_size_candidate_is_not_eligible(mock_create, extraction):
+    wrong_size_url = "https://www.amazon.com/cleanser-200ml"
+    submitted_url = "https://example.com/product"
+    identity = ProductIdentity(value="Great Widget 100ml", source="product_name")
+
+    wrong_size_page = _make_fetched_page(wrong_size_url, "Great Widget 200ml", "$7.95")
+
+    # With wrong-size candidate not eligible, no offer table is shown.
+    # The verdict without an alternative should be accepted on the first call.
+    verdict_no_alt = _verdict_with_evidence_and_alternative(None, [submitted_url] * 3)
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": wrong_size_url}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict_no_alt, "b2")),
+    ]
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = wrong_size_page
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.verdict.value == "good_deal"
+    # Two total LLM calls: fetch response + submit response (no table round-trip needed).
+    assert mock_create.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_only_eligible_candidate_can_be_selected(mock_create, extraction):
+    walmart_url = "https://www.walmart.com/cleanser"
+    submitted_url = "https://example.com/product"
+    identity = ProductIdentity(value="Great Widget", source="product_name")
+
+    walmart_page = _make_fetched_page(walmart_url, "Great Widget", "$13.59")
+    evidence_urls = [walmart_url, submitted_url, submitted_url]
+    verdict_walmart = _verdict_with_evidence_and_alternative(
+        _make_alternative(walmart_url, "$13.59"), evidence_urls
+    )
+
+    # First submit shows the offer table; second submit accepts.
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": walmart_url}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict_walmart, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_walmart, "b3")),
+    ]
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = walmart_page
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.alternative is not None
+    assert "walmart" in str(result.alternative.source_url).lower()
+
+
+@pytest.mark.asyncio
+async def test_no_alternative_required_when_no_eligible_cheaper_offer(
+    mock_create, extraction, identity
+):
+    submitted_url = "https://example.com/product"
+    verdict_no_alt = _verdict_with_evidence_and_alternative(None, [submitted_url] * 3)
+
+    # No fetch_page calls; no candidates; verdict accepted immediately.
+    mock_create.return_value = make_response(make_tool_block("submit_verdict", verdict_no_alt))
+    result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.verdict.value == "good_deal"
+    assert result.alternative is None
+    assert mock_create.call_count == 1
+
+
+def test_validate_alternative_is_lowest_rejects_with_clear_error():
+    from app.agent import _validate_alternative_is_lowest
+    from app.tools.offer_candidates import OfferCandidate
+
+    eligible = [
+        OfferCandidate(
+            merchant="www.amazon.com",
+            source_url="https://www.amazon.com/p",
+            product_name="Widget",
+            price_text="$7.95",
+            price_amount=7.95,
+        ),
+        OfferCandidate(
+            merchant="www.walmart.com",
+            source_url="https://www.walmart.com/p",
+            product_name="Widget",
+            price_text="$13.59",
+            price_amount=13.59,
+        ),
+    ]
+    alternative = {"price": "$13.59", "source_url": "https://www.walmart.com/p"}
+    rejection = _validate_alternative_is_lowest(alternative, eligible)
+
+    assert rejection is not None
+    assert "www.amazon.com" in rejection
+    assert "7.95" in rejection
+    assert "13.59" in rejection
+
+
 # --- System prompt tests ---
 
 

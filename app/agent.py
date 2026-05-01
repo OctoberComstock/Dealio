@@ -13,6 +13,13 @@ from app.schemas import ResearchResult
 from app.tools.extract_product import ProductPageExtraction
 from app.tools.fetch_page import FetchedPage, fetch_page
 from app.tools.normalize_url import fetch_page_cache_key, normalize_url
+from app.tools.offer_candidates import (
+    OfferCandidate,
+    candidate_from_page,
+    format_offer_table,
+    is_same_size,
+    parse_price_amount,
+)
 from app.tools.product_identity import ProductIdentity
 from app.tools.search_web import search_web
 
@@ -58,6 +65,49 @@ def _format_search_results(results) -> str:
     ])
 
 
+def _build_eligible_candidates(
+    candidates: list[OfferCandidate],
+    submitted_price: float,
+    identity_value: str,
+    seen_urls: set[str],
+) -> list[OfferCandidate]:
+    eligible = []
+    for candidate in candidates:
+        if candidate.price_amount is None:
+            continue
+        if not _url_was_observed(candidate.source_url, seen_urls):
+            continue
+        savings = (submitted_price - candidate.price_amount) / submitted_price
+        if savings < settings.meaningful_savings_threshold:
+            continue
+        if not is_same_size(identity_value, candidate.product_name):
+            continue
+        eligible.append(candidate)
+    eligible.sort(key=lambda c: c.price_amount)
+    return eligible
+
+
+def _validate_alternative_is_lowest(
+    alternative: dict | None,
+    eligible_candidates: list[OfferCandidate],
+) -> str | None:
+    """Return a rejection message if the alternative is not the lowest eligible offer."""
+    if not eligible_candidates or alternative is None:
+        return None
+    lowest = eligible_candidates[0]
+    alt_price = parse_price_amount(str(alternative.get("price") or ""))
+    if alt_price is None:
+        return None
+    # Allow 5% tolerance for display/rounding differences.
+    if alt_price <= lowest.price_amount * 1.05:
+        return None
+    return (
+        f"Alternative must use the lowest eligible comparable offer. "
+        f"{lowest.merchant} at ${lowest.price_amount:.2f} is cheaper than "
+        f"the submitted alternative at ${alt_price:.2f}."
+    )
+
+
 def _format_fetched_page(page) -> str:
     lines = [
         f"Title: {page.title or 'N/A'}",
@@ -92,6 +142,7 @@ async def _execute_tool(
     budget: _RemainingToolBudget,
     normalized_submitted_url: str,
     initial_fetched_page: FetchedPage | None,
+    candidates: list[OfferCandidate],
 ) -> str:
     if tool_name == "search_web":
         if budget.searches_remaining <= 0:
@@ -148,6 +199,7 @@ async def _execute_tool(
         try:
             page = await fetch_page(url)
             _observe_url(page.url, seen_urls)
+            candidates.append(candidate_from_page(page))
             return _format_fetched_page(page)
         except ValueError as exc:
             logger.warning("fetch_page failed: url=%r error=%s", url, exc)
@@ -297,6 +349,45 @@ def _build_research_result(
         return _build_fallback_result(verdict_input, extraction, identity)
 
 
+def _evaluate_verdict_submission(
+    verdict_input: dict,
+    candidates: list[OfferCandidate],
+    submitted_price: float | None,
+    identity_value: str,
+    seen_urls: set[str],
+    offer_table_shown: bool,
+) -> str:
+    """Return the tool result content for a submit_verdict call.
+
+    Returns "Verdict received." when the verdict should be accepted.
+    Returns a rejection/table message when the agent must resubmit.
+    The offer table is shown at most once (on the first rejection or first
+    submission when eligible candidates exist and an alternative is present).
+    """
+    alternative = verdict_input.get("alternative")
+    if alternative is None or submitted_price is None:
+        return "Verdict received."
+
+    eligible = _build_eligible_candidates(
+        candidates, submitted_price, identity_value, seen_urls
+    )
+    if not eligible:
+        return "Verdict received."
+
+    table_text = format_offer_table(eligible)
+    rejection = _validate_alternative_is_lowest(alternative, eligible)
+
+    if not offer_table_shown:
+        if rejection:
+            return f"{table_text}\n\n{rejection}\n\nPlease resubmit your verdict."
+        return f"{table_text}\n\nPlease confirm your verdict and resubmit."
+
+    if rejection:
+        return f"{table_text}\n\n{rejection}\n\nPlease resubmit your verdict."
+
+    return "Verdict received."
+
+
 async def _run_agent_loop(
     normalized_url: str,
     extraction: ProductPageExtraction,
@@ -310,6 +401,9 @@ async def _run_agent_loop(
         searches_remaining=settings.max_searches,
         fetches_remaining=settings.max_fetched_pages,
     )
+    candidates: list[OfferCandidate] = []
+    submitted_price = parse_price_amount(extraction.listed_price)
+    offer_table_shown = False
     logger.info(
         "Agent loop starting: url=%s identity=%r source=%s",
         normalized_url,
@@ -354,15 +448,22 @@ async def _run_agent_loop(
                     verdict_input.get("confidence"),
                     len(verdict_input.get("evidence", [])),
                 )
+                tool_result_content = _evaluate_verdict_submission(
+                    verdict_input, candidates, submitted_price,
+                    identity.value, seen_urls, offer_table_shown,
+                )
+                if tool_result_content != "Verdict received.":
+                    offer_table_shown = True
+                    verdict_input = None
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": "Verdict received.",
+                    "content": tool_result_content,
                 })
             else:
                 result_content = await _execute_tool(
                     block.name, block.input, seen_urls, budget,
-                    normalized_url, initial_fetched_page
+                    normalized_url, initial_fetched_page, candidates,
                 )
                 tool_results.append({
                     "type": "tool_result",
