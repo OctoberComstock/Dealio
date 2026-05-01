@@ -122,7 +122,27 @@ async def submit_product_url(
 
     logger.info("Research submitted: run_id=%s url=%s", run_id, normalized)
     background_tasks.add_task(_run_research_in_background, run_id, normalized)
-    return RedirectResponse(url=f"/result/{run_id}", status_code=303)
+    return RedirectResponse(url=f"/research/{run_id}/loading", status_code=303)
+
+
+@router.get("/research/{run_id}/loading", response_class=HTMLResponse)
+async def loading_page(request: Request, run_id: str):
+    run = await load_research_run(settings.database_path, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Result not found")
+
+    if run["status"] == "completed":
+        return RedirectResponse(url=f"/result/{run_id}", status_code=303)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="loading.html",
+        context={
+            "run_id": run_id,
+            "status": run["status"],
+            "failure_reason": run["failure_reason"],
+        },
+    )
 
 
 @router.get("/result/{run_id}", response_class=HTMLResponse)
@@ -132,15 +152,7 @@ async def result_page(request: Request, run_id: str):
         raise HTTPException(status_code=404, detail="Result not found")
 
     if run["status"] in ("running", "failed"):
-        return templates.TemplateResponse(
-            request=request,
-            name="loading.html",
-            context={
-                "run_id": run_id,
-                "status": run["status"],
-                "failure_reason": run["failure_reason"],
-            },
-        )
+        return RedirectResponse(url=f"/research/{run_id}/loading", status_code=303)
 
     result = ResearchResult.model_validate(run["result_payload"])
     checked_at = datetime.fromisoformat(run["checked_at"])

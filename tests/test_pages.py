@@ -67,6 +67,8 @@ async def client():
         yield ac
 
 
+# --- Homepage ---
+
 async def test_homepage_renders(client):
     response = await client.get("/")
     assert response.status_code == 200
@@ -85,6 +87,8 @@ async def test_error_page_loading_message_is_initially_hidden(client):
     assert 'id="loading-message"' in response.text
     assert "hidden" in response.text
 
+
+# --- Submit ---
 
 async def test_submit_empty_url_returns_error(client):
     response = await client.post("/", data={"product_url": ""})
@@ -105,7 +109,7 @@ async def test_submit_invalid_url_preserves_input(client):
     assert bad_url in response.text
 
 
-async def test_submit_valid_url_redirects_immediately(client):
+async def test_submit_valid_url_redirects_to_loading_page(client):
     url = "https://www.amazon.com/dp/B08N5WRWNW"
     with (
         patch(
@@ -120,7 +124,7 @@ async def test_submit_valid_url_redirects_immediately(client):
     ):
         response = await client.post("/", data={"product_url": url})
     assert response.status_code == 303
-    assert response.headers["location"] == f"/result/{FAKE_RUN_ID}"
+    assert response.headers["location"] == f"/research/{FAKE_RUN_ID}/loading"
 
 
 async def test_submit_creates_run_before_agent_executes(client):
@@ -210,6 +214,75 @@ async def test_submit_create_run_failure_returns_error_page(client):
     assert "went wrong" in response.text.lower()
 
 
+# --- Loading page ---
+
+async def test_loading_page_renders_for_running_run(client):
+    with patch(
+        "app.routers.pages.load_research_run",
+        new_callable=AsyncMock,
+        return_value=FAKE_RUN_DATA_RUNNING,
+    ):
+        response = await client.get(f"/research/{FAKE_RUN_ID}/loading")
+    assert response.status_code == 200
+    assert "agent" in response.text.lower()
+
+
+async def test_loading_page_displays_progress_steps(client):
+    with patch(
+        "app.routers.pages.load_research_run",
+        new_callable=AsyncMock,
+        return_value=FAKE_RUN_DATA_RUNNING,
+    ):
+        response = await client.get(f"/research/{FAKE_RUN_ID}/loading")
+    assert "Checking the product page" in response.text
+    assert "Searching major retailers" in response.text
+    assert "Comparing prices across stores" in response.text
+    assert "Verifying the best alternative" in response.text
+    assert "Preparing your verdict" in response.text
+
+
+async def test_loading_page_displays_supporting_copy(client):
+    with patch(
+        "app.routers.pages.load_research_run",
+        new_callable=AsyncMock,
+        return_value=FAKE_RUN_DATA_RUNNING,
+    ):
+        response = await client.get(f"/research/{FAKE_RUN_ID}/loading")
+    assert "Amazon or Walmart" in response.text
+
+
+async def test_loading_page_renders_error_for_failed_run(client):
+    with patch(
+        "app.routers.pages.load_research_run",
+        new_callable=AsyncMock,
+        return_value=FAKE_RUN_DATA_FAILED,
+    ):
+        response = await client.get(f"/research/{FAKE_RUN_ID}/loading")
+    assert response.status_code == 200
+    assert FAKE_RUN_DATA_FAILED["failure_reason"] in response.text
+
+
+async def test_loading_page_redirects_to_result_for_completed_run(client):
+    with patch(
+        "app.routers.pages.load_research_run",
+        new_callable=AsyncMock,
+        return_value=FAKE_RUN_DATA,
+    ):
+        response = await client.get(f"/research/{FAKE_RUN_ID}/loading")
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/result/{FAKE_RUN_ID}"
+
+
+async def test_loading_page_returns_404_for_missing_run(client):
+    with patch(
+        "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=None
+    ):
+        response = await client.get("/research/nonexistent-id/loading")
+    assert response.status_code == 404
+
+
+# --- Result page ---
+
 async def test_result_page_renders_for_completed_run(client):
     with patch(
         "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=FAKE_RUN_DATA
@@ -296,23 +369,23 @@ async def test_result_page_returns_404_for_missing_run(client):
     assert response.status_code == 404
 
 
-async def test_result_page_renders_loading_for_running_run(client):
+async def test_result_page_redirects_to_loading_for_running_run(client):
     with patch(
         "app.routers.pages.load_research_run",
         new_callable=AsyncMock,
         return_value=FAKE_RUN_DATA_RUNNING,
     ):
         response = await client.get(f"/result/{FAKE_RUN_ID}")
-    assert response.status_code == 200
-    assert "progress" in response.text.lower() or "researching" in response.text.lower()
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/research/{FAKE_RUN_ID}/loading"
 
 
-async def test_result_page_renders_error_for_failed_run(client):
+async def test_result_page_redirects_to_loading_for_failed_run(client):
     with patch(
         "app.routers.pages.load_research_run",
         new_callable=AsyncMock,
         return_value=FAKE_RUN_DATA_FAILED,
     ):
         response = await client.get(f"/result/{FAKE_RUN_ID}")
-    assert response.status_code == 200
-    assert FAKE_RUN_DATA_FAILED["failure_reason"] in response.text
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/research/{FAKE_RUN_ID}/loading"
