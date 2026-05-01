@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import HttpUrl, TypeAdapter, ValidationError
+from pydantic import BaseModel, HttpUrl, TypeAdapter, ValidationError
 
 from app.agent import run_research_agent
 from app.config import settings
@@ -23,6 +23,12 @@ from app.tools.product_identity import infer_product_identity
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 logger = logging.getLogger(__name__)
+
+
+class ResearchStatusResponse(BaseModel):
+    status: str
+    result_url: str
+    error_message: str | None
 
 _url_validator = TypeAdapter(HttpUrl)
 
@@ -142,6 +148,18 @@ async def loading_page(request: Request, run_id: str):
             "status": run["status"],
             "failure_reason": run["failure_reason"],
         },
+    )
+
+
+@router.get("/research/{run_id}/status")
+async def research_status(run_id: str) -> ResearchStatusResponse:
+    run = await load_research_run(settings.database_path, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return ResearchStatusResponse(
+        status=run["status"],
+        result_url=f"/result/{run_id}",
+        error_message=run["failure_reason"],
     )
 
 

@@ -103,6 +103,43 @@
     </p>
 
     <a href="/research/{{ run_id }}/loading" class="refresh-link">Refresh</a>
+
+    <script>
+        (function () {
+            var runId = "{{ run_id }}";
+
+            function showError(message) {
+                var main = document.querySelector('main');
+                main.innerHTML = '<h1 class="error-heading">Something went wrong</h1>'
+                    + '<p class="error-message">' + message + '</p>'
+                    + '<a href="/" class="back-link">← Try another product</a>';
+            }
+
+            function poll() {
+                fetch('/research/' + runId + '/status')
+                    .then(function (response) {
+                        if (response.status === 404) {
+                            showError('This research run was not found.');
+                            return;
+                        }
+                        return response.json().then(function (data) {
+                            if (data.status === 'completed') {
+                                window.location.href = data.result_url;
+                            } else if (data.status === 'failed') {
+                                window.location.reload();
+                            } else {
+                                setTimeout(poll, 2500);
+                            }
+                        });
+                    })
+                    .catch(function () {
+                        setTimeout(poll, 2500);
+                    });
+            }
+
+            setTimeout(poll, 2500);
+        }());
+    </script>
     {% endif %}
 </main>
 {% endblock %}

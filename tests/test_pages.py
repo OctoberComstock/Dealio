@@ -214,6 +214,57 @@ async def test_submit_create_run_failure_returns_error_page(client):
     assert "went wrong" in response.text.lower()
 
 
+# --- Status endpoint ---
+
+async def test_status_returns_running_for_running_run(client):
+    with patch(
+        "app.routers.pages.load_research_run",
+        new_callable=AsyncMock,
+        return_value=FAKE_RUN_DATA_RUNNING,
+    ):
+        response = await client.get(f"/research/{FAKE_RUN_ID}/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "running"
+    assert data["result_url"] == f"/result/{FAKE_RUN_ID}"
+    assert data["error_message"] is None
+
+
+async def test_status_returns_completed_for_completed_run(client):
+    with patch(
+        "app.routers.pages.load_research_run",
+        new_callable=AsyncMock,
+        return_value=FAKE_RUN_DATA,
+    ):
+        response = await client.get(f"/research/{FAKE_RUN_ID}/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "completed"
+    assert data["result_url"] == f"/result/{FAKE_RUN_ID}"
+    assert data["error_message"] is None
+
+
+async def test_status_returns_failed_with_error_message(client):
+    with patch(
+        "app.routers.pages.load_research_run",
+        new_callable=AsyncMock,
+        return_value=FAKE_RUN_DATA_FAILED,
+    ):
+        response = await client.get(f"/research/{FAKE_RUN_ID}/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "failed"
+    assert data["error_message"] == FAKE_RUN_DATA_FAILED["failure_reason"]
+
+
+async def test_status_returns_404_for_missing_run(client):
+    with patch(
+        "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=None
+    ):
+        response = await client.get("/research/nonexistent-id/status")
+    assert response.status_code == 404
+
+
 # --- Loading page ---
 
 async def test_loading_page_renders_for_running_run(client):
