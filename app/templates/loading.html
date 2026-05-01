@@ -2,19 +2,62 @@
 {% block extra_styles %}
 <style>
     main {
-        max-width: 560px;
+        max-width: 500px;
+        margin: 6rem auto 4rem;
+    }
+
+    .loading-card {
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 2rem 2rem 1.75rem;
+        box-shadow: var(--shadow-md);
+    }
+
+    .loading-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin: 0 0 0.75rem;
     }
 
     .loading-heading {
         font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text-primary);
         margin: 0 0 1.5rem;
+    }
+
+    .dots {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 1.5rem;
+    }
+
+    .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes pulse-dot {
+        0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
+        40%            { opacity: 1;    transform: scale(1);   }
     }
 
     .progress-track {
         position: relative;
-        height: 1.6rem;
-        margin: 0 0 1.5rem;
+        height: 1.5rem;
         overflow: hidden;
+        margin: 0 0 1.5rem;
     }
 
     .progress-step {
@@ -22,87 +65,96 @@
         top: 0;
         left: 0;
         opacity: 0;
-        color: #2563eb;
-        font-size: 1rem;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
         animation: step-cycle 10s linear infinite;
     }
 
-    .progress-step:nth-child(1) { animation-delay:  0s; }
-    .progress-step:nth-child(2) { animation-delay:  2s; }
-    .progress-step:nth-child(3) { animation-delay:  4s; }
-    .progress-step:nth-child(4) { animation-delay:  6s; }
-    .progress-step:nth-child(5) { animation-delay:  8s; }
+    .progress-step:nth-child(1) { animation-delay: 0s; }
+    .progress-step:nth-child(2) { animation-delay: 2s; }
+    .progress-step:nth-child(3) { animation-delay: 4s; }
+    .progress-step:nth-child(4) { animation-delay: 6s; }
+    .progress-step:nth-child(5) { animation-delay: 8s; }
 
     @keyframes step-cycle {
-        0%          { opacity: 0; }
-        5%          { opacity: 1; }
-        15%         { opacity: 1; }
-        20%, 100%   { opacity: 0; }
+        0%        { opacity: 0; }
+        5%        { opacity: 1; }
+        15%       { opacity: 1; }
+        20%, 100% { opacity: 0; }
     }
 
     .supporting-copy {
-        color: #555;
-        line-height: 1.6;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        line-height: 1.65;
         margin: 0 0 1.5rem;
-        font-size: 0.95rem;
     }
 
     .refresh-link {
-        color: #2563eb;
-        font-size: 0.9rem;
-        text-decoration: none;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--accent);
     }
 
-    .refresh-link:hover {
-        text-decoration: underline;
+    .error-card {
+        background: var(--error-bg);
+        border: 1px solid var(--error-border);
+        border-radius: var(--radius-lg);
+        padding: 2rem 2rem 1.75rem;
     }
 
     .error-heading {
-        font-size: 1.5rem;
-        margin: 0 0 1rem;
+        font-size: 1.4rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--text-primary);
+        margin: 0 0 0.75rem;
     }
 
     .error-message {
-        color: #b91c1c;
+        color: var(--error-text);
+        font-size: 0.95rem;
+        line-height: 1.6;
         margin: 0 0 1.5rem;
     }
 
     .back-link {
-        display: inline-block;
-        color: #2563eb;
-        text-decoration: none;
         font-size: 0.9rem;
-    }
-
-    .back-link:hover {
-        text-decoration: underline;
+        font-weight: 500;
+        color: var(--accent);
     }
 </style>
 {% endblock %}
 {% block content %}
 <main>
     {% if status == "failed" %}
-    <h1 class="error-heading">Research failed</h1>
-    <p class="error-message">{{ failure_reason or "Something went wrong. Please try again." }}</p>
-    <a href="/" class="back-link">← Try another product</a>
-    {% else %}
-    <h1 class="loading-heading">Your deal-checking agent is working.</h1>
-
-    <div class="progress-track" aria-live="polite" aria-label="Research progress">
-        <span class="progress-step">Checking the product page&hellip;</span>
-        <span class="progress-step">Searching major retailers&hellip;</span>
-        <span class="progress-step">Comparing prices across stores&hellip;</span>
-        <span class="progress-step">Verifying the best alternative&hellip;</span>
-        <span class="progress-step">Preparing your verdict&hellip;</span>
+    <div class="error-card">
+        <h1 class="error-heading">Something went wrong</h1>
+        <p class="error-message">{{ failure_reason or "We weren't able to complete the research. Please try again." }}</p>
+        <a href="/" class="back-link">← Try another product</a>
     </div>
-
-    <p class="supporting-copy">
-        It&rsquo;s checking the product page, searching major retailers, comparing prices,
-        and verifying the best available alternative.
-        This can take up to a minute or two for marketplace pages like Amazon or Walmart.
-    </p>
-
-    <a href="/research/{{ run_id }}/loading" class="refresh-link">Refresh</a>
+    {% else %}
+    <div class="loading-card">
+        <p class="loading-label">Research in progress</p>
+        <h1 class="loading-heading">Checking this deal for you.</h1>
+        <div class="dots" aria-hidden="true">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+        </div>
+        <div class="progress-track" aria-live="polite" aria-label="Research progress">
+            <span class="progress-step">Checking the product page&hellip;</span>
+            <span class="progress-step">Searching major retailers&hellip;</span>
+            <span class="progress-step">Comparing prices across stores&hellip;</span>
+            <span class="progress-step">Verifying the best alternative&hellip;</span>
+            <span class="progress-step">Preparing your verdict&hellip;</span>
+        </div>
+        <p class="supporting-copy">
+            Checking the product page, scanning major retailers, comparing prices, and verifying
+            the best available alternative. This can take a minute or two for marketplace pages.
+        </p>
+        <a href="/research/{{ run_id }}/loading" class="refresh-link">Refresh</a>
+    </div>
 
     <script>
         (function () {
@@ -110,9 +162,11 @@
 
             function showError(message) {
                 var main = document.querySelector('main');
-                main.innerHTML = '<h1 class="error-heading">Something went wrong</h1>'
+                main.innerHTML = '<div class="error-card">'
+                    + '<h1 class="error-heading">Something went wrong</h1>'
                     + '<p class="error-message">' + message + '</p>'
-                    + '<a href="/" class="back-link">← Try another product</a>';
+                    + '<a href="/" class="back-link">← Try another product</a>'
+                    + '</div>';
             }
 
             function poll() {
