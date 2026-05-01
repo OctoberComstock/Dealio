@@ -93,6 +93,20 @@ def _format_search_results(results) -> str:
     ])
 
 
+def _urls_are_equivalent(url_a: str, url_b: str) -> bool:
+    """Return True if two URLs resolve to the same resource.
+
+    Uses fetch_page_cache_key so Amazon URL variants with different tracking
+    or session params all match when they share the same ASIN.
+    """
+    if not url_a or not url_b:
+        return False
+    try:
+        return fetch_page_cache_key(url_a) == fetch_page_cache_key(url_b)
+    except ValueError:
+        return url_a.strip() == url_b.strip()
+
+
 def _build_eligible_candidates(
     candidates: list[OfferCandidate],
     submitted_price: float,
@@ -121,21 +135,33 @@ def _validate_alternative_is_lowest(
     alternative: dict | None,
     eligible_candidates: list[OfferCandidate],
 ) -> str | None:
-    """Return a rejection message if the alternative is not the lowest eligible offer."""
+    """Return a rejection message if the alternative is not the lowest eligible offer.
+
+    Checks both price (within 5% tolerance) and source URL against the lowest
+    eligible candidate.
+    """
     if not eligible_candidates or alternative is None:
         return None
     lowest = eligible_candidates[0]
     alt_price = parse_price_amount(str(alternative.get("price") or ""))
     if alt_price is None:
         return None
-    # Allow 5% tolerance for display/rounding differences.
-    if alt_price <= lowest.price_amount * 1.05:
-        return None
-    return (
-        f"Alternative must use the lowest eligible comparable offer. "
-        f"{lowest.merchant} at ${lowest.price_amount:.2f} is cheaper than "
-        f"the submitted alternative at ${alt_price:.2f}."
-    )
+    # Price check: allow 5% tolerance for display/rounding differences.
+    if alt_price > lowest.price_amount * 1.05:
+        return (
+            f"Alternative must use the lowest eligible comparable offer. "
+            f"{lowest.merchant} at ${lowest.price_amount:.2f} is cheaper than "
+            f"the submitted alternative at ${alt_price:.2f}."
+        )
+    # URL check: the alternative must point to the lowest eligible offer.
+    alt_url = str(alternative.get("source_url") or "")
+    if not _urls_are_equivalent(alt_url, lowest.source_url):
+        return (
+            f"Alternative source URL does not match the lowest eligible offer. "
+            f"Please use {lowest.merchant} at ${lowest.price_amount:.2f} "
+            f"({lowest.source_url}) as the alternative."
+        )
+    return None
 
 
 def _format_fetched_page(page) -> str:
@@ -419,8 +445,7 @@ def _evaluate_verdict_submission(
     The offer table is shown at most once (on the first rejection or first
     submission when eligible candidates exist and an alternative is present).
     """
-    alternative = verdict_input.get("alternative")
-    if alternative is None or submitted_price is None:
+    if submitted_price is None:
         return "Verdict received."
 
     eligible = _build_eligible_candidates(
@@ -430,6 +455,16 @@ def _evaluate_verdict_submission(
         return "Verdict received."
 
     table_text = format_offer_table(eligible)
+    alternative = verdict_input.get("alternative")
+
+    if alternative is None:
+        lowest = eligible[0]
+        missing_alternative_message = (
+            f"Eligible cheaper alternatives were found. Please include the lowest eligible "
+            f"comparable offer as the alternative: {lowest.merchant} at ${lowest.price_amount:.2f}."
+        )
+        return f"{table_text}\n\n{missing_alternative_message}\n\nPlease resubmit your verdict."
+
     rejection = _validate_alternative_is_lowest(alternative, eligible)
 
     if not offer_table_shown:
@@ -503,8 +538,14 @@ async def _run_agent_loop(
                     verdict_input.get("confidence"),
                     len(verdict_input.get("evidence", [])),
                 )
+                # Exclude the submitted product's own URL from comparable offers
+                # so the agent is never asked to recommend the same listing as an alternative.
+                comparable_candidates = [
+                    c for c in candidates
+                    if not _urls_are_equivalent(c.source_url, normalized_url)
+                ]
                 tool_result_content = _evaluate_verdict_submission(
-                    verdict_input, candidates, submitted_price,
+                    verdict_input, comparable_candidates, submitted_price,
                     identity.value, seen_urls, offer_table_shown,
                 )
                 if tool_result_content != "Verdict received.":
