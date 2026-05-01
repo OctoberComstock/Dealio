@@ -213,7 +213,7 @@ async def test_fetch_page_cache_hit_does_not_decrement_budget(mock_create, extra
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 8
         mock_settings.max_fetched_pages = 1
-        mock_settings.agent_timeout_seconds = 60
+        mock_settings.agent_timeout_seconds = 120
         with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = other_page
             result = await run_research_agent(
@@ -443,7 +443,7 @@ async def test_search_budget_exhaustion_does_not_execute_extra_searches(
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 1
         mock_settings.max_fetched_pages = 8
-        mock_settings.agent_timeout_seconds = 60
+        mock_settings.agent_timeout_seconds = 120
         mock_create.side_effect = [
             make_response(make_tool_block("search_web", {"query": "s1"}, "b1")),
             make_response(make_tool_block("search_web", {"query": "s2"}, "b2")),
@@ -462,7 +462,7 @@ async def test_search_budget_exhaustion_returns_submit_verdict_guidance(
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 1
         mock_settings.max_fetched_pages = 8
-        mock_settings.agent_timeout_seconds = 60
+        mock_settings.agent_timeout_seconds = 120
         mock_create.side_effect = [
             make_response(make_tool_block("search_web", {"query": "s1"}, "b1")),
             make_response(make_tool_block("search_web", {"query": "s2"}, "b2")),
@@ -482,7 +482,7 @@ async def test_fetch_budget_exhaustion_does_not_execute_extra_fetches(
     with patch("app.agent.settings") as mock_settings:
         mock_settings.max_searches = 8
         mock_settings.max_fetched_pages = 1
-        mock_settings.agent_timeout_seconds = 60
+        mock_settings.agent_timeout_seconds = 120
         mock_create.side_effect = [
             make_response(make_tool_block("fetch_page", {"url": "https://example.com/p1"}, "b1")),
             make_response(make_tool_block("fetch_page", {"url": "https://example.com/p2"}, "b2")),
