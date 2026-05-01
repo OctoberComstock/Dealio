@@ -43,6 +43,7 @@ async def init_db(db_path: str) -> None:
                 status TEXT NOT NULL DEFAULT 'running',
                 result_payload TEXT,
                 checked_at TEXT,
+                failure_reason TEXT,
                 created_at TEXT NOT NULL
             )
         """)
@@ -51,6 +52,10 @@ async def init_db(db_path: str) -> None:
         columns = {row[1] for row in rows}
         if rows and "status" not in columns:
             await _migrate_research_runs_add_status(db)
+            columns.add("status")
+        if rows and "failure_reason" not in columns:
+            await db.execute("ALTER TABLE research_runs ADD COLUMN failure_reason TEXT")
+            logger.info("Migrated research_runs to add failure_reason column")
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_research_runs_normalized_url
             ON research_runs(normalized_url)
@@ -111,20 +116,28 @@ async def complete_research_run(
     logger.info("Research run completed: run_id=%s", run_id)
 
 
-async def mark_research_run_failed(db_path: str, run_id: str) -> None:
+async def mark_research_run_failed(
+    db_path: str,
+    run_id: str,
+    failure_reason: str,
+) -> None:
     async with aiosqlite.connect(db_path) as db:
         await db.execute(
-            "UPDATE research_runs SET status = 'failed' WHERE id = ?",
-            (run_id,),
+            "UPDATE research_runs SET status = 'failed', failure_reason = ? WHERE id = ?",
+            (failure_reason, run_id),
         )
         await db.commit()
-    logger.info("Research run marked failed: run_id=%s", run_id)
+    logger.info("Research run marked failed: run_id=%s reason=%s", run_id, failure_reason)
 
 
 async def load_research_run(db_path: str, run_id: str) -> dict | None:
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute(
-            "SELECT id, status, result_payload, checked_at FROM research_runs WHERE id = ?",
+            """
+            SELECT id, status, result_payload, checked_at, failure_reason
+            FROM research_runs
+            WHERE id = ?
+            """,
             (run_id,),
         )
         row = await cursor.fetchone()
@@ -136,6 +149,7 @@ async def load_research_run(db_path: str, run_id: str) -> dict | None:
             "status": row[1],
             "result_payload": result_payload,
             "checked_at": row[3],
+            "failure_reason": row[4],
         }
 
 
