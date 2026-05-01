@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     max_searches: int = 5
     max_fetched_pages: int = 8
+    meaningful_savings_threshold: float = 0.10
     request_timeout_seconds: int = 60
 
     search_cache_ttl_seconds: int = 900
