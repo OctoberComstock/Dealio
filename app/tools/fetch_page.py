@@ -360,11 +360,17 @@ async def _fetch_shopify_product(
     json_url = f"{base}/products/{handle}.json"
 
     async def _shopify_request_hook(request: httpx.Request) -> None:
-        await _validate_fetch_url_and_resolved_host(str(request.url), validated_hostnames, dns_validation_tasks)
+        await _validate_fetch_url_and_resolved_host(
+            str(request.url), validated_hostnames, dns_validation_tasks
+        )
 
     try:
-        await _validate_fetch_url_and_resolved_host(js_url, validated_hostnames, dns_validation_tasks)
-        await _validate_fetch_url_and_resolved_host(json_url, validated_hostnames, dns_validation_tasks)
+        await _validate_fetch_url_and_resolved_host(
+            js_url, validated_hostnames, dns_validation_tasks
+        )
+        await _validate_fetch_url_and_resolved_host(
+            json_url, validated_hostnames, dns_validation_tasks
+        )
         async with httpx.AsyncClient(
             timeout=10.0,
             follow_redirects=True,
@@ -452,7 +458,9 @@ async def _handle_playwright_route(
         await route.abort()
         return
     try:
-        await _validate_fetch_url_and_resolved_host(request.url, validated_hostnames, dns_validation_tasks)
+        await _validate_fetch_url_and_resolved_host(
+            request.url, validated_hostnames, dns_validation_tasks
+        )
     except ValueError as exc:
         logger.warning(
             "Blocked rendered fetch request to unsafe URL %r: %s",
@@ -492,7 +500,9 @@ async def _render_page(
                 await page.route("**/*", _route_safely)
                 await page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
                 try:
-                    await page.wait_for_selector(_PRICE_READY_SELECTOR, timeout=_PRICE_READY_TIMEOUT_MS)
+                    await page.wait_for_selector(
+                        _PRICE_READY_SELECTOR, timeout=_PRICE_READY_TIMEOUT_MS
+                    )
                 except PlaywrightTimeoutError:
                     pass
                 title = (await page.title()) or None
@@ -767,7 +777,9 @@ async def fetch_page(url: str) -> FetchedPage:
     )
 
     async def _redirect_hook(request: httpx.Request) -> None:
-        await _validate_fetch_url_and_resolved_host(str(request.url), validated_hostnames, dns_validation_tasks)
+        await _validate_fetch_url_and_resolved_host(
+            str(request.url), validated_hostnames, dns_validation_tasks
+        )
 
     t_http = time.perf_counter()
     logger.debug("fetch_page: httpx fetch starting for %r", url)
@@ -811,7 +823,12 @@ async def fetch_page(url: str) -> FetchedPage:
     if _needs_rendered_fallback(static, html, url):
         logger.debug("fetch_page: rendered extraction starting for %r", url)
         t_render = time.perf_counter()
-        rendered = await _render_page(url, settings.render_page_timeout_seconds * 1000, validated_hostnames, dns_validation_tasks)
+        rendered = await _render_page(
+            url,
+            settings.render_page_timeout_seconds * 1000,
+            validated_hostnames,
+            dns_validation_tasks,
+        )
         logger.debug(
             "fetch_page: rendered extraction completed in %.3fs for %r",
             time.perf_counter() - t_render,

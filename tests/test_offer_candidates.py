@@ -11,7 +11,6 @@ from app.tools.offer_candidates import (
 )
 from app.tools.search_web import SearchResult
 
-
 # --- parse_price_amount ---
 
 

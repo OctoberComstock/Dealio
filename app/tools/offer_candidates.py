@@ -136,7 +136,8 @@ def is_same_size(submitted_name: str, candidate_name: str | None, match_text: st
 
     for size_str in submitted_sizes:
         ml_value = _size_to_ml(size_str)
-        if ml_value is not None and _candidate_text_has_volume_equivalent(ml_value, candidate_full_text):
+        has_volume_equiv = _candidate_text_has_volume_equivalent(ml_value, candidate_full_text)
+        if ml_value is not None and has_volume_equiv:
             return True
 
     return False
