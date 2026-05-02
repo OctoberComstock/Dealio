@@ -1556,6 +1556,45 @@ async def test_no_alternative_required_when_no_eligible_cheaper_offer(
     assert mock_create.call_count == 1
 
 
+@pytest.mark.asyncio
+async def test_sold_out_alternative_rejected_even_when_no_eligible_candidates(
+    mock_create, extraction
+):
+    ebay_url = "https://www.ebay.com/cleanser"
+    submitted_url = "https://example.com/product"
+    identity = ProductIdentity(value="Pokémon Card", source="product_name")
+
+    # eBay is the only candidate and it is sold out, so eligible will be empty.
+    ebay_page = FetchedPage(
+        url=ebay_url,
+        title="Pokémon Card",
+        content="Sold out. This listing has ended.",
+        price_guess="$6.50",
+    )
+    evidence_urls = [ebay_url, submitted_url, submitted_url]
+
+    verdict_with_soldout_alt = _verdict_with_evidence_and_alternative(
+        _make_alternative(ebay_url, "$6.50"), evidence_urls
+    )
+    verdict_no_alt = _verdict_with_evidence_and_alternative(None, evidence_urls)
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": ebay_url}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict_with_soldout_alt, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_no_alt, "b3")),
+    ]
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = ebay_page
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.alternative is None
+
+    messages = mock_create.call_args_list[2].kwargs["messages"]
+    rejection_tool_result = messages[-2]["content"][0]["content"]
+    assert "sold out or unavailable" in rejection_tool_result
+
+
 async def test_no_alternative_rejected_when_eligible_candidates_exist(mock_create, extraction):
     amazon_url = "https://www.amazon.com/cleanser"
     submitted_url = "https://example.com/product"

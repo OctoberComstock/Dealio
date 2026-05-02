@@ -136,6 +136,12 @@ def test_is_same_size_wrong_size_in_match_text():
     ) is False
 
 
+def test_is_same_size_non_volume_size_mismatch_returns_false():
+    # Regression: non-volume sizes (ct, g, pack) must not call
+    # _candidate_text_has_volume_equivalent with ml_value=None.
+    assert is_same_size("Pokémon Card 10ct", "Pokémon Card 20ct") is False
+
+
 # --- is_unavailable ---
 
 

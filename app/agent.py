@@ -454,6 +454,18 @@ def _evaluate_verdict_submission(
     The offer table is shown at most once (on the first rejection or first
     submission when eligible candidates exist and an alternative is present).
     """
+    alternative = verdict_input.get("alternative")
+
+    if alternative is not None:
+        alt_url = str(alternative.get("source_url") or "")
+        alt_candidate = _find_candidate_by_url(alt_url, candidates)
+        if alt_candidate is not None and is_unavailable(alt_candidate):
+            unavailable_rejection = (
+                "The submitted alternative is sold out or unavailable. "
+                "Please omit the alternative or choose a currently available listing."
+            )
+            return f"{unavailable_rejection}\n\nPlease resubmit your verdict."
+
     if submitted_price is None:
         return "Verdict received."
 
@@ -464,7 +476,6 @@ def _evaluate_verdict_submission(
         return "Verdict received."
 
     table_text = format_offer_table(eligible)
-    alternative = verdict_input.get("alternative")
 
     if alternative is None:
         lowest = eligible[0]
@@ -473,18 +484,6 @@ def _evaluate_verdict_submission(
             f"comparable offer as the alternative: {lowest.merchant} at ${lowest.price_amount:.2f}."
         )
         return f"{table_text}\n\n{missing_alternative_message}\n\nPlease resubmit your verdict."
-
-    alt_url = str(alternative.get("source_url") or "")
-    alt_candidate = _find_candidate_by_url(alt_url, candidates)
-    if alt_candidate is not None and is_unavailable(alt_candidate):
-        unavailable_rejection = (
-            "The submitted alternative is sold out or unavailable. "
-            "Please choose a currently available listing from the offer table, "
-            "or omit the alternative if no eligible option exists."
-        )
-        if not offer_table_shown:
-            return f"{table_text}\n\n{unavailable_rejection}\n\nPlease resubmit your verdict."
-        return f"{unavailable_rejection}\n\nPlease resubmit your verdict."
 
     rejection = _validate_alternative_is_lowest(alternative, eligible)
 
