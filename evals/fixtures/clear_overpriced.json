@@ -1,0 +1,69 @@
+{
+  "extraction": {
+    "product_name": "HydraBoost Moisturizing Cream 16oz",
+    "listed_price": "$32.99",
+    "merchant": "overpricedboutique.com"
+  },
+  "identity": {
+    "value": "HydraBoost Moisturizing Cream 16oz",
+    "source": "product_name"
+  },
+  "submitted_page": {
+    "url": "https://www.overpricedboutique.com/products/moisturizing-cream-16oz",
+    "title": "HydraBoost Moisturizing Cream 16oz",
+    "content": "HydraBoost Moisturizing Cream 16oz. Premium skincare. Price: $32.99.",
+    "price_guess": "$32.99"
+  },
+  "search_results": [
+    {
+      "title": "HydraBoost Moisturizing Cream 16oz - Amazon",
+      "url": "https://www.amazon.com/hydraboost-moisturizing-cream/dp/B00EXAMPLE3",
+      "snippet": "HydraBoost Moisturizing Cream 16oz. $11.99. In stock. Subscribe and Save available.",
+      "score": 0.95
+    },
+    {
+      "title": "HydraBoost Moisturizing Cream 16oz - Walmart",
+      "url": "https://www.walmart.com/ip/hydraboost-moisturizing-cream-16oz/222222",
+      "snippet": "HydraBoost Moisturizing Cream 16oz. $12.49. Pickup today or free delivery.",
+      "score": 0.91
+    },
+    {
+      "title": "HydraBoost Moisturizing Cream 16oz - Target",
+      "url": "https://www.target.com/p/hydraboost-moisturizing-cream-16oz/-/A-99999",
+      "snippet": "HydraBoost Moisturizing Cream 16oz. $13.49. In stock. Same-day delivery available.",
+      "score": 0.87
+    },
+    {
+      "title": "HydraBoost Cream price comparison - PriceCheck",
+      "url": "https://www.pricecheck.com/hydraboost-cream-16oz",
+      "snippet": "HydraBoost Moisturizing Cream 16oz is widely available for $11 to $14. Standard retail price is around $12.99 at major stores.",
+      "score": 0.79
+    }
+  ],
+  "fetched_pages": {
+    "https://www.amazon.com/hydraboost-moisturizing-cream/dp/B00EXAMPLE3": {
+      "url": "https://www.amazon.com/hydraboost-moisturizing-cream/dp/B00EXAMPLE3",
+      "title": "HydraBoost Moisturizing Cream 16oz",
+      "content": "HydraBoost Moisturizing Cream 16oz. $11.99. In stock. Ships same day. 4.7 stars, 50,000+ reviews.",
+      "price_guess": "$11.99"
+    },
+    "https://www.walmart.com/ip/hydraboost-moisturizing-cream-16oz/222222": {
+      "url": "https://www.walmart.com/ip/hydraboost-moisturizing-cream-16oz/222222",
+      "title": "HydraBoost Moisturizing Cream 16oz - Walmart.com",
+      "content": "HydraBoost Moisturizing Cream 16oz. $12.49. In stock. Free pickup in store.",
+      "price_guess": "$12.49"
+    },
+    "https://www.target.com/p/hydraboost-moisturizing-cream-16oz/-/A-99999": {
+      "url": "https://www.target.com/p/hydraboost-moisturizing-cream-16oz/-/A-99999",
+      "title": "HydraBoost Moisturizing Cream 16oz - Target",
+      "content": "HydraBoost Moisturizing Cream 16oz. $13.49. In stock. Same-day delivery available.",
+      "price_guess": "$13.49"
+    },
+    "https://www.pricecheck.com/hydraboost-cream-16oz": {
+      "url": "https://www.pricecheck.com/hydraboost-cream-16oz",
+      "title": "HydraBoost Cream 16oz - Price Comparison",
+      "content": "HydraBoost Moisturizing Cream 16oz price comparison: Amazon $11.99, Walmart $12.49, Target $13.49. Standard market price is $11.99 to $13.49. The overpricedboutique.com listing at $32.99 is roughly 2.5x above market rate.",
+      "price_guess": null
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "extraction": {
+    "product_name": "PureRice Black Rice Moisture Cleansing Gel 200ml",
+    "listed_price": "$26.99",
+    "merchant": "brandsite.com"
+  },
+  "identity": {
+    "value": "PureRice Black Rice Moisture Cleansing Gel 200ml",
+    "source": "product_name"
+  },
+  "submitted_page": {
+    "url": "https://www.brandsite.com/products/rice-cleanser-200ml",
+    "title": "PureRice Black Rice Moisture Cleansing Gel 200ml",
+    "content": "PureRice Black Rice Moisture Cleansing Gel 200ml. Gentle foaming cleanser. Price: $26.99.",
+    "price_guess": "$26.99"
+  },
+  "search_results": [
+    {
+      "title": "PureRice Black Rice Moisture Cleansing Gel 200ml - Amazon",
+      "url": "https://www.amazon.com/purerice-black-rice-cleansing-gel/dp/B00EXAMPLE4",
+      "snippet": "PureRice Black Rice Moisture Cleansing Gel 200ml. $11.99. In stock. Ships from Amazon.",
+      "score": 0.96
+    },
+    {
+      "title": "PureRice Black Rice Moisture Cleansing Gel 200ml - Walmart",
+      "url": "https://www.walmart.com/ip/purerice-black-rice-cleansing-gel-200ml/333333",
+      "snippet": "PureRice Black Rice Moisture Cleansing Gel 200ml. $15.99. In stock at Walmart.",
+      "score": 0.91
+    },
+    {
+      "title": "PureRice Black Rice Moisture Cleansing Gel 200ml - Target",
+      "url": "https://www.target.com/p/purerice-black-rice-cleanser-200ml/-/A-77777",
+      "snippet": "PureRice Black Rice Moisture Cleansing Gel 200ml. $18.99. In stock. Same-day delivery.",
+      "score": 0.86
+    },
+    {
+      "title": "PureRice Black Rice Cleansing Gel review",
+      "url": "https://www.kbeautyblog.com/purerice-review",
+      "snippet": "PureRice Black Rice Moisture Cleansing Gel 200ml sells for $12 to $19 on major marketplaces. Great product at Amazon's price.",
+      "score": 0.77
+    }
+  ],
+  "fetched_pages": {
+    "https://www.amazon.com/purerice-black-rice-cleansing-gel/dp/B00EXAMPLE4": {
+      "url": "https://www.amazon.com/purerice-black-rice-cleansing-gel/dp/B00EXAMPLE4",
+      "title": "PureRice Black Rice Moisture Cleansing Gel 200ml",
+      "content": "PureRice Black Rice Moisture Cleansing Gel 200ml. $11.99. In stock. Fast shipping from Amazon. 4.5 stars.",
+      "price_guess": "$11.99"
+    },
+    "https://www.walmart.com/ip/purerice-black-rice-cleansing-gel-200ml/333333": {
+      "url": "https://www.walmart.com/ip/purerice-black-rice-cleansing-gel-200ml/333333",
+      "title": "PureRice Black Rice Moisture Cleansing Gel 200ml - Walmart.com",
+      "content": "PureRice Black Rice Moisture Cleansing Gel 200ml. $15.99. In stock. Free store pickup available.",
+      "price_guess": "$15.99"
+    },
+    "https://www.target.com/p/purerice-black-rice-cleanser-200ml/-/A-77777": {
+      "url": "https://www.target.com/p/purerice-black-rice-cleanser-200ml/-/A-77777",
+      "title": "PureRice Black Rice Moisture Cleansing Gel 200ml - Target",
+      "content": "PureRice Black Rice Moisture Cleansing Gel 200ml. $18.99. In stock.",
+      "price_guess": "$18.99"
+    },
+    "https://www.kbeautyblog.com/purerice-review": {
+      "url": "https://www.kbeautyblog.com/purerice-review",
+      "title": "PureRice Black Rice Cleansing Gel Review",
+      "content": "PureRice Black Rice Moisture Cleansing Gel 200ml is widely available at Amazon ($11.99), Walmart ($15.99), and Target ($18.99). The brandsite.com price of $26.99 is noticeably above these comparable offers.",
+      "price_guess": null
+    }
+  }
+}
