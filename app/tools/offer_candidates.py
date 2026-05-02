@@ -25,7 +25,18 @@ _VOLUME_SIZE_RE = re.compile(
 )
 
 _UNAVAILABLE_RE = re.compile(
-    r"\b(?:out\s+of\s+stock|sold\s+out|unavailable|currently\s+unavailable)\b",
+    r"\b(?:"
+    r"out\s+of\s+stock"
+    r"|sold\s+out"
+    r"|unavailable"
+    r"|currently\s+unavailable"
+    r"|no\s+longer\s+available"
+    r"|not\s+available"
+    r"|temporarily\s+out\s+of\s+stock"
+    r"|item\s+ended"
+    r"|listing\s+ended"
+    r"|ended"
+    r")\b",
     re.IGNORECASE,
 )
 
@@ -125,7 +136,9 @@ def is_same_size(submitted_name: str, candidate_name: str | None, match_text: st
 
     for size_str in submitted_sizes:
         ml_value = _size_to_ml(size_str)
-        if ml_value is not None and _candidate_text_has_volume_equivalent(ml_value, candidate_full_text):
+        if ml_value is None:
+            continue
+        if _candidate_text_has_volume_equivalent(ml_value, candidate_full_text):
             return True
 
     return False

@@ -11,7 +11,6 @@ from app.tools.offer_candidates import (
 )
 from app.tools.search_web import SearchResult
 
-
 # --- parse_price_amount ---
 
 
@@ -137,6 +136,12 @@ def test_is_same_size_wrong_size_in_match_text():
     ) is False
 
 
+def test_is_same_size_non_volume_size_mismatch_returns_false():
+    # Regression: non-volume sizes (ct, g, pack) must not call
+    # _candidate_text_has_volume_equivalent with ml_value=None.
+    assert is_same_size("Pokémon Card 10ct", "Pokémon Card 20ct") is False
+
+
 # --- is_unavailable ---
 
 
@@ -196,6 +201,90 @@ def test_is_unavailable_in_stock_candidate_returns_false():
         price_text="$7.95",
         price_amount=7.95,
         match_text="In stock. Ships within 2 days.",
+    )
+    assert is_unavailable(candidate) is False
+
+
+def test_is_unavailable_no_longer_available():
+    candidate = OfferCandidate(
+        merchant="www.ebay.com",
+        source_url="https://www.ebay.com/p",
+        product_name="Pokémon Card",
+        price_text="$6.50",
+        price_amount=6.50,
+        match_text="This item is no longer available.",
+    )
+    assert is_unavailable(candidate) is True
+
+
+def test_is_unavailable_not_available():
+    candidate = OfferCandidate(
+        merchant="www.target.com",
+        source_url="https://www.target.com/p",
+        product_name="Pokémon Card",
+        price_text="$8.00",
+        price_amount=8.00,
+        match_text="Not available in your region.",
+    )
+    assert is_unavailable(candidate) is True
+
+
+def test_is_unavailable_temporarily_out_of_stock():
+    candidate = OfferCandidate(
+        merchant="www.walmart.com",
+        source_url="https://www.walmart.com/p",
+        product_name="Pokémon Card",
+        price_text="$9.00",
+        price_amount=9.00,
+        match_text="Temporarily out of stock.",
+    )
+    assert is_unavailable(candidate) is True
+
+
+def test_is_unavailable_item_ended():
+    candidate = OfferCandidate(
+        merchant="www.ebay.com",
+        source_url="https://www.ebay.com/p",
+        product_name="Pokémon Card",
+        price_text="$6.50",
+        price_amount=6.50,
+        match_text="Item ended. This listing is no longer accepting bids.",
+    )
+    assert is_unavailable(candidate) is True
+
+
+def test_is_unavailable_listing_ended():
+    candidate = OfferCandidate(
+        merchant="www.ebay.com",
+        source_url="https://www.ebay.com/p",
+        product_name="Pokémon Card",
+        price_text="$6.50",
+        price_amount=6.50,
+        match_text="Listing ended.",
+    )
+    assert is_unavailable(candidate) is True
+
+
+def test_is_unavailable_ended_standalone():
+    candidate = OfferCandidate(
+        merchant="www.ebay.com",
+        source_url="https://www.ebay.com/p",
+        product_name="Pokémon Card",
+        price_text="$6.50",
+        price_amount=6.50,
+        match_text="This auction has ended.",
+    )
+    assert is_unavailable(candidate) is True
+
+
+def test_is_unavailable_unknown_availability_returns_false():
+    candidate = OfferCandidate(
+        merchant="www.ebay.com",
+        source_url="https://www.ebay.com/p",
+        product_name="Pokémon Card",
+        price_text="$6.50",
+        price_amount=6.50,
+        match_text="Great condition. Fast shipping.",
     )
     assert is_unavailable(candidate) is False
 

@@ -211,7 +211,8 @@ async def test_fetch_page_cache_hit_returns_cached_content(mock_create, extracti
             "https://example.com/product", extraction, identity,
             initial_fetched_page=cached_page,
         )
-    tool_result_content = mock_create.call_args_list[1].kwargs["messages"][-2]["content"][0]["content"]
+    messages = mock_create.call_args_list[1].kwargs["messages"]
+    tool_result_content = messages[-2]["content"][0]["content"]
     assert "Cached Widget Title" in tool_result_content
 
 
@@ -484,7 +485,8 @@ async def test_search_web_priced_result_can_drive_offer_table(
     assert result.alternative is not None
     assert result.alternative.price == "$7.95"
 
-    rejection_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    messages = mock_create.call_args_list[3].kwargs["messages"]
+    rejection_tool_result = messages[-2]["content"][0]["content"]
     assert "Comparable offers found" in rejection_tool_result
     assert "www.amazon.com" in rejection_tool_result
     assert "$7.95" in rejection_tool_result
@@ -548,7 +550,8 @@ async def test_search_web_result_without_price_does_not_become_offer_candidate(
     assert result.alternative is not None
     assert result.alternative.price == "$11.90"
 
-    confirmation_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    messages = mock_create.call_args_list[3].kwargs["messages"]
+    confirmation_tool_result = messages[-2]["content"][0]["content"]
     assert "www.amazon.com" not in confirmation_tool_result
     assert "$100" not in confirmation_tool_result
 
@@ -682,7 +685,8 @@ async def test_duplicate_search_and_fetch_url_only_appears_once_in_offer_table(
     assert result.alternative is not None
     assert result.alternative.price == "$7.95"
 
-    rejection_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    messages = mock_create.call_args_list[3].kwargs["messages"]
+    rejection_tool_result = messages[-2]["content"][0]["content"]
     # The rejection text also mentions www.amazon.com in the reason sentence, so count
     # only in the offer table section (before the guidance line).
     offer_table_section = rejection_tool_result.split("If recommending")[0]
@@ -717,9 +721,11 @@ async def test_out_of_stock_candidate_excluded_from_offer_table(
         },
     }
 
+    walmart_fetch_url = "https://www.walmart.com/ip/great-widget"
+    amazon_fetch_url = "https://www.amazon.com/great-widget/dp/B000000001"
     mock_create.side_effect = [
-        make_response(make_tool_block("fetch_page", {"url": "https://www.walmart.com/ip/great-widget"}, "b1")),
-        make_response(make_tool_block("fetch_page", {"url": "https://www.amazon.com/great-widget/dp/B000000001"}, "b2")),
+        make_response(make_tool_block("fetch_page", {"url": walmart_fetch_url}, "b1")),
+        make_response(make_tool_block("fetch_page", {"url": amazon_fetch_url}, "b2")),
         make_response(make_tool_block("submit_verdict", amazon_verdict, "b3")),
         make_response(make_tool_block("submit_verdict", amazon_verdict, "b4")),
     ]
@@ -742,7 +748,8 @@ async def test_out_of_stock_candidate_excluded_from_offer_table(
     assert result.alternative.price == "$7.95"
 
     # The offer table sent to the agent should include Amazon but exclude the out-of-stock Walmart.
-    offer_table_message = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    messages = mock_create.call_args_list[3].kwargs["messages"]
+    offer_table_message = messages[-2]["content"][0]["content"]
     assert "www.amazon.com" in offer_table_message
     assert "www.walmart.com" not in offer_table_message
 
@@ -773,8 +780,9 @@ async def test_candidate_eligible_when_size_in_content_not_title(
         },
     }
 
+    amazon_fetch_url = "https://www.amazon.com/great-widget/dp/B000000001"
     mock_create.side_effect = [
-        make_response(make_tool_block("fetch_page", {"url": "https://www.amazon.com/great-widget/dp/B000000001"}, "b1")),
+        make_response(make_tool_block("fetch_page", {"url": amazon_fetch_url}, "b1")),
         make_response(make_tool_block("submit_verdict", amazon_verdict, "b2")),
         make_response(make_tool_block("submit_verdict", amazon_verdict, "b3")),
     ]
@@ -792,7 +800,8 @@ async def test_candidate_eligible_when_size_in_content_not_title(
     assert result.alternative.price == "$7.95"
 
     # Amazon should appear in the offer table (eligible despite title lacking '100ml').
-    offer_table_message = mock_create.call_args_list[2].kwargs["messages"][-2]["content"][0]["content"]
+    messages = mock_create.call_args_list[2].kwargs["messages"]
+    offer_table_message = messages[-2]["content"][0]["content"]
     assert "www.amazon.com" in offer_table_message
 
 
@@ -1547,6 +1556,45 @@ async def test_no_alternative_required_when_no_eligible_cheaper_offer(
     assert mock_create.call_count == 1
 
 
+@pytest.mark.asyncio
+async def test_sold_out_alternative_rejected_even_when_no_eligible_candidates(
+    mock_create, extraction
+):
+    ebay_url = "https://www.ebay.com/cleanser"
+    submitted_url = "https://example.com/product"
+    identity = ProductIdentity(value="Pokémon Card", source="product_name")
+
+    # eBay is the only candidate and it is sold out, so eligible will be empty.
+    ebay_page = FetchedPage(
+        url=ebay_url,
+        title="Pokémon Card",
+        content="Sold out. This listing has ended.",
+        price_guess="$6.50",
+    )
+    evidence_urls = [ebay_url, submitted_url, submitted_url]
+
+    verdict_with_soldout_alt = _verdict_with_evidence_and_alternative(
+        _make_alternative(ebay_url, "$6.50"), evidence_urls
+    )
+    verdict_no_alt = _verdict_with_evidence_and_alternative(None, evidence_urls)
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": ebay_url}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict_with_soldout_alt, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_no_alt, "b3")),
+    ]
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = ebay_page
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.alternative is None
+
+    messages = mock_create.call_args_list[2].kwargs["messages"]
+    rejection_tool_result = messages[-2]["content"][0]["content"]
+    assert "sold out or unavailable" in rejection_tool_result
+
+
 async def test_no_alternative_rejected_when_eligible_candidates_exist(mock_create, extraction):
     amazon_url = "https://www.amazon.com/cleanser"
     submitted_url = "https://example.com/product"
@@ -1573,7 +1621,8 @@ async def test_no_alternative_rejected_when_eligible_candidates_exist(mock_creat
     assert result.alternative is not None
     assert "amazon" in str(result.alternative.source_url).lower()
 
-    rejection_tool_result = mock_create.call_args_list[2].kwargs["messages"][-2]["content"][0]["content"]
+    messages = mock_create.call_args_list[2].kwargs["messages"]
+    rejection_tool_result = messages[-2]["content"][0]["content"]
     assert "Please include the lowest eligible comparable offer" in rejection_tool_result
     assert "www.amazon.com" in rejection_tool_result
     assert "$7.95" in rejection_tool_result
@@ -1614,9 +1663,64 @@ async def test_alternative_url_rejected_when_wrong_source_url(mock_create, extra
     assert result.alternative is not None
     assert "amazon" in str(result.alternative.source_url).lower()
 
-    rejection_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    messages = mock_create.call_args_list[3].kwargs["messages"]
+    rejection_tool_result = messages[-2]["content"][0]["content"]
     assert "source URL does not match" in rejection_tool_result
     assert "www.amazon.com" in rejection_tool_result
+
+
+@pytest.mark.asyncio
+async def test_sold_out_alternative_is_rejected_with_unavailable_message(
+    mock_create, extraction
+):
+    amazon_url = "https://www.amazon.com/cleanser"
+    ebay_url = "https://www.ebay.com/cleanser"
+    submitted_url = "https://example.com/product"
+    identity = ProductIdentity(value="Pokémon Card", source="product_name")
+
+    # Amazon is available and cheaper than submitted price.
+    amazon_page = FetchedPage(
+        url=amazon_url,
+        title="Pokémon Card",
+        content="In stock. Ships in 2 days.",
+        price_guess="$7.95",
+    )
+    # eBay page has a price but is sold out.
+    ebay_page = FetchedPage(
+        url=ebay_url,
+        title="Pokémon Card",
+        content="Sold out. This listing has ended.",
+        price_guess="$6.50",
+    )
+
+    evidence_urls = [amazon_url, submitted_url, submitted_url]
+    verdict_with_soldout_alt = _verdict_with_evidence_and_alternative(
+        _make_alternative(ebay_url, "$6.50"), evidence_urls
+    )
+    verdict_with_amazon_alt = _verdict_with_evidence_and_alternative(
+        _make_alternative(amazon_url, "$7.95"), evidence_urls
+    )
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": amazon_url}, "b1")),
+        make_response(make_tool_block("fetch_page", {"url": ebay_url}, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_with_soldout_alt, "b3")),
+        make_response(make_tool_block("submit_verdict", verdict_with_amazon_alt, "b4")),
+    ]
+
+    def fetch_side_effect(url):
+        return amazon_page if "amazon" in url else ebay_page
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.side_effect = fetch_side_effect
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.alternative is not None
+    assert "amazon" in str(result.alternative.source_url).lower()
+
+    messages = mock_create.call_args_list[3].kwargs["messages"]
+    rejection_tool_result = messages[-2]["content"][0]["content"]
+    assert "sold out or unavailable" in rejection_tool_result
 
 
 def test_validate_alternative_is_lowest_rejects_with_clear_error():

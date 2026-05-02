@@ -1,4 +1,4 @@
-import socket
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -6,7 +6,6 @@ import pytest
 
 from app.tools.fetch_page import (
     FetchedPage,
-    _ABORTED_RESOURCE_TYPES,
     _detect_condition_text,
     _detect_listing_count,
     _detect_lowest_price,
@@ -21,7 +20,6 @@ from app.tools.fetch_page import (
     _validate_resolved_addresses_are_safe,
     fetch_page,
 )
-import asyncio
 
 # --- HTML fixtures ---
 
@@ -865,7 +863,9 @@ async def test_failed_dns_validation_does_not_mark_hostname_as_validated():
 
     with patch("socket.getaddrinfo", return_value=private_ip_result):
         with pytest.raises(ValueError, match="private"):
-            await _validate_fetch_url_and_resolved_host("https://internal.corp/page", validated, tasks)
+            await _validate_fetch_url_and_resolved_host(
+                "https://internal.corp/page", validated, tasks
+            )
 
     assert "internal.corp" not in validated
     assert "internal.corp" not in tasks
@@ -873,7 +873,9 @@ async def test_failed_dns_validation_does_not_mark_hostname_as_validated():
     # a subsequent call retries rather than silently treating the hostname as safe
     with patch("socket.getaddrinfo", return_value=private_ip_result):
         with pytest.raises(ValueError, match="private"):
-            await _validate_fetch_url_and_resolved_host("https://internal.corp/page2", validated, tasks)
+            await _validate_fetch_url_and_resolved_host(
+                "https://internal.corp/page2", validated, tasks
+            )
 
 
 async def test_concurrent_validation_of_same_hostname_shares_one_dns_task():

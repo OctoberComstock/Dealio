@@ -2,7 +2,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.tools.extract_product import ProductExtractionResult, ProductPageExtraction, extract_product
+from app.tools.extract_product import (
+    ProductExtractionResult,
+    ProductPageExtraction,
+    extract_product,
+)
 from app.tools.fetch_page import FetchedPage
 
 
