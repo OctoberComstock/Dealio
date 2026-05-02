@@ -25,7 +25,18 @@ _VOLUME_SIZE_RE = re.compile(
 )
 
 _UNAVAILABLE_RE = re.compile(
-    r"\b(?:out\s+of\s+stock|sold\s+out|unavailable|currently\s+unavailable)\b",
+    r"\b(?:"
+    r"out\s+of\s+stock"
+    r"|sold\s+out"
+    r"|unavailable"
+    r"|currently\s+unavailable"
+    r"|no\s+longer\s+available"
+    r"|not\s+available"
+    r"|temporarily\s+out\s+of\s+stock"
+    r"|item\s+ended"
+    r"|listing\s+ended"
+    r"|ended"
+    r")\b",
     re.IGNORECASE,
 )
 

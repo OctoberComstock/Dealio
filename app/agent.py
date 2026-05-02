@@ -131,6 +131,15 @@ def _build_eligible_candidates(
     return eligible
 
 
+def _find_candidate_by_url(
+    url: str, candidates: list[OfferCandidate]
+) -> OfferCandidate | None:
+    for candidate in candidates:
+        if _urls_are_equivalent(url, candidate.source_url):
+            return candidate
+    return None
+
+
 def _validate_alternative_is_lowest(
     alternative: dict | None,
     eligible_candidates: list[OfferCandidate],
@@ -464,6 +473,18 @@ def _evaluate_verdict_submission(
             f"comparable offer as the alternative: {lowest.merchant} at ${lowest.price_amount:.2f}."
         )
         return f"{table_text}\n\n{missing_alternative_message}\n\nPlease resubmit your verdict."
+
+    alt_url = str(alternative.get("source_url") or "")
+    alt_candidate = _find_candidate_by_url(alt_url, candidates)
+    if alt_candidate is not None and is_unavailable(alt_candidate):
+        unavailable_rejection = (
+            "The submitted alternative is sold out or unavailable. "
+            "Please choose a currently available listing from the offer table, "
+            "or omit the alternative if no eligible option exists."
+        )
+        if not offer_table_shown:
+            return f"{table_text}\n\n{unavailable_rejection}\n\nPlease resubmit your verdict."
+        return f"{unavailable_rejection}\n\nPlease resubmit your verdict."
 
     rejection = _validate_alternative_is_lowest(alternative, eligible)
 

@@ -1619,6 +1619,59 @@ async def test_alternative_url_rejected_when_wrong_source_url(mock_create, extra
     assert "www.amazon.com" in rejection_tool_result
 
 
+@pytest.mark.asyncio
+async def test_sold_out_alternative_is_rejected_with_unavailable_message(
+    mock_create, extraction
+):
+    amazon_url = "https://www.amazon.com/cleanser"
+    ebay_url = "https://www.ebay.com/cleanser"
+    submitted_url = "https://example.com/product"
+    identity = ProductIdentity(value="Pokémon Card", source="product_name")
+
+    # Amazon is available and cheaper than submitted price.
+    amazon_page = FetchedPage(
+        url=amazon_url,
+        title="Pokémon Card",
+        content="In stock. Ships in 2 days.",
+        price_guess="$7.95",
+    )
+    # eBay page has a price but is sold out.
+    ebay_page = FetchedPage(
+        url=ebay_url,
+        title="Pokémon Card",
+        content="Sold out. This listing has ended.",
+        price_guess="$6.50",
+    )
+
+    evidence_urls = [amazon_url, submitted_url, submitted_url]
+    verdict_with_soldout_alt = _verdict_with_evidence_and_alternative(
+        _make_alternative(ebay_url, "$6.50"), evidence_urls
+    )
+    verdict_with_amazon_alt = _verdict_with_evidence_and_alternative(
+        _make_alternative(amazon_url, "$7.95"), evidence_urls
+    )
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": amazon_url}, "b1")),
+        make_response(make_tool_block("fetch_page", {"url": ebay_url}, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_with_soldout_alt, "b3")),
+        make_response(make_tool_block("submit_verdict", verdict_with_amazon_alt, "b4")),
+    ]
+
+    def fetch_side_effect(url):
+        return amazon_page if "amazon" in url else ebay_page
+
+    with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.side_effect = fetch_side_effect
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.alternative is not None
+    assert "amazon" in str(result.alternative.source_url).lower()
+
+    rejection_tool_result = mock_create.call_args_list[3].kwargs["messages"][-2]["content"][0]["content"]
+    assert "sold out or unavailable" in rejection_tool_result
+
+
 def test_validate_alternative_is_lowest_rejects_with_clear_error():
     from app.agent import _validate_alternative_is_lowest
     from app.tools.offer_candidates import OfferCandidate
