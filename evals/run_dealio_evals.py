@@ -23,12 +23,16 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from app.agent import run_research_agent
-from app.tools.extract_product import ProductPageExtraction
-from app.tools.fetch_page import FetchedPage
-from app.tools.offer_candidates import parse_price_amount
-from app.tools.product_identity import ProductIdentity
-from app.tools.search_web import SearchResult
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from app.agent import run_research_agent  # noqa: E402
+from app.tools.extract_product import ProductPageExtraction  # noqa: E402
+from app.tools.fetch_page import FetchedPage  # noqa: E402
+from app.tools.offer_candidates import parse_price_amount  # noqa: E402
+from app.tools.product_identity import ProductIdentity  # noqa: E402
+from app.tools.search_web import SearchResult  # noqa: E402
 
 EVALS_DIR = Path(__file__).parent
 FIXTURES_DIR = EVALS_DIR / "fixtures"
@@ -123,13 +127,35 @@ def check_assertions(result, expected: dict, observed_urls: set[str]) -> list[st
         if result.alternative is not None and not result.alternative.is_cheaper:
             failures.append("Alternative has is_cheaper=False")
 
-    if "alternative_price_at_most" in expected and result.alternative is not None:
+    if "alternative_price_at_most" in expected:
         threshold = expected["alternative_price_at_most"]
-        actual_price = parse_price_amount(result.alternative.price)
-        if actual_price is not None and actual_price > threshold:
+        if result.alternative is None:
             failures.append(
-                f"Alternative price ${actual_price:.2f} exceeds max ${threshold:.2f}"
+                f"alternative_price_at_most={threshold} requires an alternative, but got none"
             )
+        else:
+            actual_price = parse_price_amount(result.alternative.price)
+            if actual_price is None:
+                failures.append(
+                    f"Alternative price '{result.alternative.price}' could not be parsed"
+                )
+            elif actual_price > threshold:
+                failures.append(
+                    f"Alternative price ${actual_price:.2f} exceeds max ${threshold:.2f}"
+                )
+
+    if "alternative_url_any_of" in expected:
+        allowed_urls = expected["alternative_url_any_of"]
+        if result.alternative is None:
+            failures.append(
+                "alternative_url_any_of requires an alternative, but got none"
+            )
+        else:
+            alt_url = str(result.alternative.source_url)
+            if alt_url not in allowed_urls:
+                failures.append(
+                    f"Alternative URL '{alt_url}' not in allowed set {allowed_urls}"
+                )
 
     if expected.get("all_evidence_urls_observed"):
         for item in result.evidence:

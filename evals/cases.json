@@ -82,7 +82,10 @@
     "expected": {
       "must_have_alternative": true,
       "alternative_must_be_cheaper": true,
-      "alternative_price_at_most": 18.00
+      "alternative_price_at_most": 18.00,
+      "alternative_url_any_of": [
+        "https://www.amazon.com/reviveeye-peptide-eye-cream/dp/B00EXAMPLE8"
+      ]
     }
   }
 ]
