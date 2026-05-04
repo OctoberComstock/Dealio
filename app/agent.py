@@ -18,6 +18,7 @@ from app.tools.offer_candidates import (
     candidate_from_page,
     candidate_from_search_result,
     format_offer_table,
+    is_purchasable_offer_candidate,
     is_same_size,
     is_unavailable,
     parse_price_amount,
@@ -125,6 +126,8 @@ def _build_eligible_candidates(
         if is_unavailable(candidate):
             continue
         if not is_same_size(identity_value, candidate.product_name, candidate.match_text):
+            continue
+        if not is_purchasable_offer_candidate(candidate):
             continue
         eligible.append(candidate)
     eligible.sort(key=lambda c: c.price_amount)

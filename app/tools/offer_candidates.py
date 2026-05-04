@@ -45,6 +45,45 @@ _VOLUME_TOLERANCE = 0.02  # 2% to accommodate 3.38/3.4 fl oz rounding for 100ml
 
 _MATCH_TEXT_MAX_CHARS = 500
 
+# A price expressed as a range (e.g. "$17 to $21", "$11–$14") signals market-summary
+# content rather than a single purchasable offer. Requires $ on both sides to avoid
+# false matches on product codes or dimension strings.
+_PRICE_RANGE_RE = re.compile(
+    r"\$\s*[\d,]+(?:\.\d{1,2})?\s*(?:to|[-–—])\s*\$\s*[\d,]+(?:\.\d{1,2})?",
+    re.IGNORECASE,
+)
+
+# Language that describes market-wide pricing rather than a single concrete offer.
+_MARKET_SUMMARY_RE = re.compile(
+    r"\b(?:"
+    r"typically\s+retails?"
+    r"|typically\s+sells?"
+    r"|usually\s+sells?"
+    r"|market\s+price"
+    r"|standard\s+retail\s+price"
+    r"|widely\s+available\s+for"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Concrete purchasing signals that indicate a specific available listing even when
+# surrounding text contains comparison or editorial language.
+_PURCHASABLE_SIGNAL_RE = re.compile(
+    r"\b(?:"
+    r"in\s+stock"
+    r"|ships?\s+from"
+    r"|ships?\s+within"
+    r"|add\s+to\s+cart"
+    r"|buy\s+now"
+    r"|sold\s+by"
+    r"|free\s+shipping"
+    r"|pickup"
+    r"|free\s+delivery"
+    r"|available\s+for\s+delivery"
+    r")\b",
+    re.IGNORECASE,
+)
+
 
 @dataclass
 class OfferCandidate:
@@ -147,6 +186,28 @@ def is_unavailable(candidate: OfferCandidate) -> bool:
     """Return True if the candidate contains a clear unavailability signal."""
     combined_text = f"{candidate.product_name or ''} {candidate.match_text}"
     return bool(_UNAVAILABLE_RE.search(combined_text))
+
+
+def is_purchasable_offer_candidate(candidate: OfferCandidate) -> bool:
+    """Return True when the candidate represents a concrete purchasable listing.
+
+    A candidate fails this check when its text contains a price range (e.g.
+    "$17 to $21") or market-summary language without any concrete purchasing
+    signals. This lets editorial and comparison pages remain as evidence while
+    preventing them from being recommended as alternatives.
+
+    Broad keywords like "review" or "blog" are intentionally not used here because
+    legitimate ecommerce product pages frequently contain that language.
+    """
+    combined = f"{candidate.product_name or ''} {candidate.match_text}"
+
+    if _PRICE_RANGE_RE.search(combined):
+        return False
+
+    if _MARKET_SUMMARY_RE.search(combined) and not _PURCHASABLE_SIGNAL_RE.search(combined):
+        return False
+
+    return True
 
 
 def candidate_from_page(page: FetchedPage) -> OfferCandidate:

@@ -5,6 +5,7 @@ from app.tools.offer_candidates import (
     candidate_from_search_result,
     extract_offer_price_text,
     format_offer_table,
+    is_purchasable_offer_candidate,
     is_same_size,
     is_unavailable,
     parse_price_amount,
@@ -495,3 +496,126 @@ def test_format_offer_table_includes_source_type():
     ]
     table = format_offer_table(candidates)
     assert "search_result" in table
+
+
+# --- is_purchasable_offer_candidate ---
+
+
+def test_is_purchasable_offer_candidate_price_range_in_match_text_returns_false():
+    candidate = OfferCandidate(
+        merchant="www.beautyprices.com",
+        source_url="https://www.beautyprices.com/cleanser",
+        product_name="CleanSkin Cleanser Price Comparison",
+        price_text="$17",
+        price_amount=17.0,
+        match_text="CleanSkin Gentle Foaming Cleanser 100ml sells for $17 to $21.",
+    )
+    assert is_purchasable_offer_candidate(candidate) is False
+
+
+def test_is_purchasable_offer_candidate_price_range_with_en_dash_returns_false():
+    candidate = OfferCandidate(
+        merchant="www.pricecheck.com",
+        source_url="https://www.pricecheck.com/cream",
+        product_name="HydraBoost Cream Price Check",
+        price_text="$11",
+        price_amount=11.0,
+        match_text="HydraBoost Cream is widely available for $11–$14.",
+    )
+    assert is_purchasable_offer_candidate(candidate) is False
+
+
+def test_is_purchasable_offer_candidate_price_range_in_title_returns_false():
+    candidate = OfferCandidate(
+        merchant="www.pricecheck.com",
+        source_url="https://www.pricecheck.com/cream",
+        product_name="HydraBoost Cream $11 to $14",
+        price_text="$11",
+        price_amount=11.0,
+        match_text="",
+    )
+    assert is_purchasable_offer_candidate(candidate) is False
+
+
+def test_is_purchasable_offer_candidate_market_summary_without_positive_signals_returns_false():
+    candidate = OfferCandidate(
+        merchant="www.beautyblog.com",
+        source_url="https://www.beautyblog.com/face-wash-review",
+        product_name="DailyCare Gentle Face Wash Review",
+        price_text="$17",
+        price_amount=17.0,
+        match_text="DailyCare Gentle Face Wash typically retails for around $17.",
+    )
+    assert is_purchasable_offer_candidate(candidate) is False
+
+
+def test_is_purchasable_offer_candidate_market_summary_with_in_stock_returns_true():
+    candidate = OfferCandidate(
+        merchant="www.amazon.com",
+        source_url="https://www.amazon.com/product",
+        product_name="DailyCare Gentle Face Wash 200ml",
+        price_text="$17.99",
+        price_amount=17.99,
+        match_text="Market price around $17.99. In stock. Ships from Amazon.",
+    )
+    assert is_purchasable_offer_candidate(candidate) is True
+
+
+def test_is_purchasable_offer_candidate_specific_price_with_in_stock_returns_true():
+    candidate = OfferCandidate(
+        merchant="www.amazon.com",
+        source_url="https://www.amazon.com/product",
+        product_name="ReviveEye Peptide Eye Cream 30ml",
+        price_text="$16.49",
+        price_amount=16.49,
+        match_text="ReviveEye Peptide Eye Cream 30ml. $16.49. In stock. Sold by Amazon.",
+    )
+    assert is_purchasable_offer_candidate(candidate) is True
+
+
+def test_is_purchasable_offer_candidate_product_page_with_reviews_text_returns_true():
+    candidate = OfferCandidate(
+        merchant="www.amazon.com",
+        source_url="https://www.amazon.com/product",
+        product_name="HydraBoost Moisturizing Cream 16oz",
+        price_text="$11.99",
+        price_amount=11.99,
+        match_text="$11.99. In stock. 4.7 stars, 50,000+ reviews. Ships same day.",
+    )
+    assert is_purchasable_offer_candidate(candidate) is True
+
+
+def test_is_purchasable_offer_candidate_buying_guide_copy_with_in_stock_returns_true():
+    candidate = OfferCandidate(
+        merchant="www.walmart.com",
+        source_url="https://www.walmart.com/product",
+        product_name="HydraBoost Cream 16oz - Walmart.com",
+        price_text="$12.49",
+        price_amount=12.49,
+        match_text="$12.49. In stock. Free pickup available. See our buying guide for skincare.",
+    )
+    assert is_purchasable_offer_candidate(candidate) is True
+
+
+def test_is_purchasable_offer_candidate_price_range_is_hard_stop_even_with_positive_signals():
+    candidate = OfferCandidate(
+        merchant="www.somesite.com",
+        source_url="https://www.somesite.com/product",
+        product_name="Cleanser 100ml",
+        price_text="$17",
+        price_amount=17.0,
+        match_text="Available for $17 to $21. In stock. Free shipping.",
+    )
+    assert is_purchasable_offer_candidate(candidate) is False
+
+
+def test_is_purchasable_offer_candidate_no_signals_returns_true():
+    candidate = OfferCandidate(
+        merchant="www.target.com",
+        source_url="https://www.target.com/product",
+        product_name="CleanSkin Cleanser 100ml",
+        price_text="$17.99",
+        price_amount=17.99,
+        match_text="CleanSkin Cleanser 100ml. $17.99.",
+    )
+    assert is_purchasable_offer_candidate(candidate) is True

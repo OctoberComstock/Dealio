@@ -556,6 +556,37 @@ async def test_search_web_result_without_price_does_not_become_offer_candidate(
     assert "$100" not in confirmation_tool_result
 
 
+async def test_price_range_search_result_is_not_eligible_as_alternative(
+    mock_create, extraction, identity
+):
+    price_comparison_result = SearchResult(
+        title="Great Widget Price Comparison",
+        url="https://www.pricecheck.example.com/great-widget",
+        snippet="Great Widget 100ml sells for $7 to $12 across major retailers.",
+        metadata={"source": "tavily", "score": 0.85},
+    )
+    verdict_without_alternative = {
+        **VALID_VERDICT,
+        "alternative": None,
+    }
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "Great Widget price"}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict_without_alternative, "b2")),
+    ]
+
+    with patch("app.agent.search_web", new_callable=AsyncMock) as mock_search:
+        mock_search.return_value = [price_comparison_result]
+        result = await run_research_agent(
+            "https://example.com/product",
+            extraction,
+            identity,
+        )
+
+    assert result.verdict.value == "good_deal"
+    assert result.alternative is None
+
+
 async def test_fetch_page_cache_hit_skips_network_and_comparable_candidates_are_found(
     mock_create, extraction, identity
 ):
