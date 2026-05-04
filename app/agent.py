@@ -468,6 +468,28 @@ def _evaluate_verdict_submission(
                 "Please omit the alternative or choose a currently available listing."
             )
             return f"{unavailable_rejection}\n\nPlease resubmit your verdict."
+        if alt_candidate is not None and not is_purchasable_offer_candidate(alt_candidate):
+            return (
+                "The submitted alternative appears to be an evidence-only page or "
+                "market-summary page, not a concrete purchasable listing. "
+                "Please omit the alternative or choose a specific purchasable product/listing page."
+                "\n\nPlease resubmit your verdict."
+            )
+        if (
+            alt_candidate is not None
+            and submitted_price is not None
+            and alt_candidate.price_amount is not None
+            and alternative.get("is_cheaper")
+        ):
+            savings = (submitted_price - alt_candidate.price_amount) / submitted_price
+            if savings < settings.meaningful_savings_threshold:
+                return (
+                    f"The submitted alternative is not meaningfully cheaper "
+                    f"({savings:.1%} savings is below the "
+                    f"{settings.meaningful_savings_threshold:.0%} threshold). "
+                    "Please omit the alternative or find a substantially cheaper offer."
+                    "\n\nPlease resubmit your verdict."
+                )
 
     if submitted_price is None:
         return "Verdict received."
