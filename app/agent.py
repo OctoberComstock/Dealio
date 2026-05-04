@@ -18,6 +18,7 @@ from app.tools.offer_candidates import (
     candidate_from_page,
     candidate_from_search_result,
     format_offer_table,
+    is_purchasable_offer_candidate,
     is_same_size,
     is_unavailable,
     parse_price_amount,
@@ -125,6 +126,8 @@ def _build_eligible_candidates(
         if is_unavailable(candidate):
             continue
         if not is_same_size(identity_value, candidate.product_name, candidate.match_text):
+            continue
+        if not is_purchasable_offer_candidate(candidate):
             continue
         eligible.append(candidate)
     eligible.sort(key=lambda c: c.price_amount)
@@ -465,6 +468,28 @@ def _evaluate_verdict_submission(
                 "Please omit the alternative or choose a currently available listing."
             )
             return f"{unavailable_rejection}\n\nPlease resubmit your verdict."
+        if alt_candidate is not None and not is_purchasable_offer_candidate(alt_candidate):
+            return (
+                "The submitted alternative appears to be an evidence-only page or "
+                "market-summary page, not a concrete purchasable listing. "
+                "Please omit the alternative or choose a specific purchasable product/listing page."
+                "\n\nPlease resubmit your verdict."
+            )
+        if (
+            alt_candidate is not None
+            and submitted_price is not None
+            and alt_candidate.price_amount is not None
+            and alternative.get("is_cheaper")
+        ):
+            savings = (submitted_price - alt_candidate.price_amount) / submitted_price
+            if savings < settings.meaningful_savings_threshold:
+                return (
+                    f"The submitted alternative is not meaningfully cheaper "
+                    f"({savings:.1%} savings is below the "
+                    f"{settings.meaningful_savings_threshold:.0%} threshold). "
+                    "Please omit the alternative or find a substantially cheaper offer."
+                    "\n\nPlease resubmit your verdict."
+                )
 
     if submitted_price is None:
         return "Verdict received."

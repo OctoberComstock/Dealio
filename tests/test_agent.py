@@ -556,6 +556,37 @@ async def test_search_web_result_without_price_does_not_become_offer_candidate(
     assert "$100" not in confirmation_tool_result
 
 
+async def test_price_range_search_result_is_not_eligible_as_alternative(
+    mock_create, extraction, identity
+):
+    price_comparison_result = SearchResult(
+        title="Great Widget Price Comparison",
+        url="https://www.pricecheck.example.com/great-widget",
+        snippet="Great Widget 100ml sells for $7 to $12 across major retailers.",
+        metadata={"source": "tavily", "score": 0.85},
+    )
+    verdict_without_alternative = {
+        **VALID_VERDICT,
+        "alternative": None,
+    }
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "Great Widget price"}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict_without_alternative, "b2")),
+    ]
+
+    with patch("app.agent.search_web", new_callable=AsyncMock) as mock_search:
+        mock_search.return_value = [price_comparison_result]
+        result = await run_research_agent(
+            "https://example.com/product",
+            extraction,
+            identity,
+        )
+
+    assert result.verdict.value == "good_deal"
+    assert result.alternative is None
+
+
 async def test_fetch_page_cache_hit_skips_network_and_comparable_candidates_are_found(
     mock_create, extraction, identity
 ):
@@ -1554,6 +1585,86 @@ async def test_no_alternative_required_when_no_eligible_cheaper_offer(
     assert result.verdict.value == "good_deal"
     assert result.alternative is None
     assert mock_create.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_price_comparison_alternative_rejected_when_no_eligible_candidates(
+    mock_create, extraction, identity
+):
+    """When no eligible cheaper candidates exist and the agent submits a price-comparison
+    page as the alternative, the verdict is rejected and the final result has no alternative."""
+    submitted_url = "https://example.com/product"
+    pricecheck_url = "https://www.pricecheck.example.com/great-widget"
+
+    pricecheck_result = SearchResult(
+        title="Great Widget Price Comparison",
+        url=pricecheck_url,
+        snippet="Great Widget 100ml sells for $7 to $12 across major retailers.",
+        metadata={"source": "tavily", "score": 0.85},
+    )
+    evidence_urls = [pricecheck_url, submitted_url, submitted_url]
+
+    verdict_with_pricecheck_alt = _verdict_with_evidence_and_alternative(
+        _make_alternative(pricecheck_url, "$7.00"), evidence_urls
+    )
+    verdict_no_alt = _verdict_with_evidence_and_alternative(None, evidence_urls)
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "Great Widget price"}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict_with_pricecheck_alt, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_no_alt, "b3")),
+    ]
+
+    with patch("app.agent.search_web", new_callable=AsyncMock) as mock_search:
+        mock_search.return_value = [pricecheck_result]
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.alternative is None
+
+    messages = mock_create.call_args_list[2].kwargs["messages"]
+    rejection_tool_result = messages[-2]["content"][0]["content"]
+    assert "evidence-only" in rejection_tool_result
+
+
+@pytest.mark.asyncio
+async def test_below_threshold_is_cheaper_alternative_rejected_when_no_eligible_candidates(
+    mock_create, extraction, identity
+):
+    """When no eligible cheaper candidates exist and the agent submits a known candidate
+    whose savings are below the meaningful threshold, the verdict is rejected."""
+    submitted_url = "https://example.com/product"
+    walmart_url = "https://www.walmart.com/ip/widget/111111"
+
+    # Submitted price from extraction fixture is $29.99; Walmart at $28.50 is only ~5% cheaper,
+    # which is below the meaningful_savings_threshold of 10%.
+    walmart_result = SearchResult(
+        title="Great Widget 100ml - Walmart",
+        url=walmart_url,
+        snippet="Great Widget 100ml. $28.50. In stock at Walmart.",
+        metadata={"source": "tavily", "score": 0.88},
+    )
+    evidence_urls = [walmart_url, submitted_url, submitted_url]
+
+    verdict_with_walmart_alt = _verdict_with_evidence_and_alternative(
+        _make_alternative(walmart_url, "$28.50"), evidence_urls
+    )
+    verdict_no_alt = _verdict_with_evidence_and_alternative(None, evidence_urls)
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "Great Widget price"}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict_with_walmart_alt, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_no_alt, "b3")),
+    ]
+
+    with patch("app.agent.search_web", new_callable=AsyncMock) as mock_search:
+        mock_search.return_value = [walmart_result]
+        result = await run_research_agent(submitted_url, extraction, identity)
+
+    assert result.alternative is None
+
+    messages = mock_create.call_args_list[2].kwargs["messages"]
+    rejection_tool_result = messages[-2]["content"][0]["content"]
+    assert "threshold" in rejection_tool_result
 
 
 @pytest.mark.asyncio
