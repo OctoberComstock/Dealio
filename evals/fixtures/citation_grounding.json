@@ -1,0 +1,57 @@
+{
+  "extraction": {
+    "product_name": "BrightSkin Vitamin C Serum 30ml",
+    "listed_price": "$24.99",
+    "merchant": "shopexample.com"
+  },
+  "identity": {
+    "value": "BrightSkin Vitamin C Serum 30ml",
+    "source": "product_name"
+  },
+  "submitted_page": {
+    "url": "https://www.shopexample.com/products/vitamin-c-serum-30ml",
+    "title": "BrightSkin Vitamin C Serum 30ml",
+    "content": "BrightSkin Vitamin C Serum 30ml. Brightening antioxidant serum. Price: $24.99.",
+    "price_guess": "$24.99"
+  },
+  "search_results": [
+    {
+      "title": "BrightSkin Vitamin C Serum 30ml - Amazon",
+      "url": "https://www.amazon.com/brightskin-vitamin-c-serum/dp/B00EXAMPLE6",
+      "snippet": "BrightSkin Vitamin C Serum 30ml. $22.99. In stock. Sold by Amazon.",
+      "score": 0.93
+    },
+    {
+      "title": "BrightSkin Vitamin C Serum 30ml - Sephora",
+      "url": "https://www.sephora.com/product/brightskin-vitamin-c-serum-P67890",
+      "snippet": "BrightSkin Vitamin C Serum 30ml. $25.00. In stock. Free samples with purchase.",
+      "score": 0.88
+    },
+    {
+      "title": "BrightSkin Vitamin C Serum 30ml - Dermstore",
+      "url": "https://www.dermstore.com/brightskin-vitamin-c-serum-30ml",
+      "snippet": "BrightSkin Vitamin C Serum 30ml. $23.50. In stock. Free shipping over $40.",
+      "score": 0.84
+    }
+  ],
+  "fetched_pages": {
+    "https://www.amazon.com/brightskin-vitamin-c-serum/dp/B00EXAMPLE6": {
+      "url": "https://www.amazon.com/brightskin-vitamin-c-serum/dp/B00EXAMPLE6",
+      "title": "BrightSkin Vitamin C Serum 30ml",
+      "content": "BrightSkin Vitamin C Serum 30ml. $22.99. In stock. Ships from Amazon. Vitamin C 15% formula.",
+      "price_guess": "$22.99"
+    },
+    "https://www.sephora.com/product/brightskin-vitamin-c-serum-P67890": {
+      "url": "https://www.sephora.com/product/brightskin-vitamin-c-serum-P67890",
+      "title": "BrightSkin Vitamin C Serum 30ml - Sephora",
+      "content": "BrightSkin Vitamin C Serum 30ml. $25.00. In stock at Sephora.",
+      "price_guess": "$25.00"
+    },
+    "https://www.dermstore.com/brightskin-vitamin-c-serum-30ml": {
+      "url": "https://www.dermstore.com/brightskin-vitamin-c-serum-30ml",
+      "title": "BrightSkin Vitamin C Serum 30ml - Dermstore",
+      "content": "BrightSkin Vitamin C Serum 30ml. $23.50. In stock.",
+      "price_guess": "$23.50"
+    }
+  }
+}

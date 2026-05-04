@@ -1,0 +1,45 @@
+{
+  "extraction": {
+    "product_name": "Bespoke Artisan Botanical Facial Mist 50ml",
+    "listed_price": "$34.00",
+    "merchant": "nicheshop.com"
+  },
+  "identity": {
+    "value": "Bespoke Artisan Botanical Facial Mist 50ml",
+    "source": "product_name"
+  },
+  "submitted_page": {
+    "url": "https://www.nicheshop.com/products/artisan-facial-mist-50ml",
+    "title": "Bespoke Artisan Botanical Facial Mist 50ml",
+    "content": "Bespoke Artisan Botanical Facial Mist 50ml. Small-batch handcrafted formula. Limited edition. Price: $34.00.",
+    "price_guess": "$34.00"
+  },
+  "search_results": [
+    {
+      "title": "Artisan Facial Mist products - general overview",
+      "url": "https://www.beautyinsider.com/facial-mist-guide",
+      "snippet": "Facial mists range widely in price. No specific pricing data found for Bespoke Artisan Botanical Facial Mist 50ml.",
+      "score": 0.55
+    },
+    {
+      "title": "Botanical facial mists for 2024",
+      "url": "https://www.skincareguide.com/botanical-mists",
+      "snippet": "Various botanical facial mists available from multiple brands. Pricing varies widely from $10 to $60 depending on formulation and brand.",
+      "score": 0.48
+    }
+  ],
+  "fetched_pages": {
+    "https://www.beautyinsider.com/facial-mist-guide": {
+      "url": "https://www.beautyinsider.com/facial-mist-guide",
+      "title": "Facial Mist Guide - Beauty Insider",
+      "content": "Facial mists come in many varieties. No comparable pricing data is available for the specific Bespoke Artisan Botanical Facial Mist 50ml product.",
+      "price_guess": null
+    },
+    "https://www.skincareguide.com/botanical-mists": {
+      "url": "https://www.skincareguide.com/botanical-mists",
+      "title": "Botanical Facial Mists - Skincare Guide",
+      "content": "Various botanical mists are available across price points. The market for artisan small-batch mists is fragmented with no clear price benchmarks.",
+      "price_guess": null
+    }
+  }
+}

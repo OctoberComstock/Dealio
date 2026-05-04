@@ -1,0 +1,69 @@
+{
+  "extraction": {
+    "product_name": "CleanSkin Gentle Foaming Cleanser 100ml",
+    "listed_price": "$18.99",
+    "merchant": "cleanserco.com"
+  },
+  "identity": {
+    "value": "CleanSkin Gentle Foaming Cleanser 100ml",
+    "source": "product_name"
+  },
+  "submitted_page": {
+    "url": "https://www.cleanserco.com/products/gentle-cleanser-100ml",
+    "title": "CleanSkin Gentle Foaming Cleanser 100ml",
+    "content": "CleanSkin Gentle Foaming Cleanser 100ml. Travel-size gentle cleanser. Price: $18.99.",
+    "price_guess": "$18.99"
+  },
+  "search_results": [
+    {
+      "title": "CleanSkin Gentle Foaming Cleanser 200ml - Amazon",
+      "url": "https://www.amazon.com/cleanskin-gentle-cleanser-200ml/dp/B00EXAMPLE5",
+      "snippet": "CleanSkin Gentle Foaming Cleanser 200ml. $13.99. In stock. Ships from Amazon.",
+      "score": 0.91
+    },
+    {
+      "title": "CleanSkin Gentle Foaming Cleanser 100ml - Walmart",
+      "url": "https://www.walmart.com/ip/cleanskin-gentle-cleanser-100ml/444444",
+      "snippet": "CleanSkin Gentle Foaming Cleanser 100ml. $17.99. In stock at Walmart.",
+      "score": 0.88
+    },
+    {
+      "title": "CleanSkin Gentle Foaming Cleanser 100ml - Ulta",
+      "url": "https://www.ulta.com/p/cleanskin-gentle-foaming-cleanser-100ml",
+      "snippet": "CleanSkin Gentle Foaming Cleanser 100ml. $19.99. In stock.",
+      "score": 0.82
+    },
+    {
+      "title": "CleanSkin price comparison",
+      "url": "https://www.beautyprices.com/cleanskin-cleanser",
+      "snippet": "CleanSkin Gentle Foaming Cleanser 100ml sells for $17 to $21. The 200ml size sells for $13 to $16 and is a different product.",
+      "score": 0.74
+    }
+  ],
+  "fetched_pages": {
+    "https://www.amazon.com/cleanskin-gentle-cleanser-200ml/dp/B00EXAMPLE5": {
+      "url": "https://www.amazon.com/cleanskin-gentle-cleanser-200ml/dp/B00EXAMPLE5",
+      "title": "CleanSkin Gentle Foaming Cleanser 200ml",
+      "content": "CleanSkin Gentle Foaming Cleanser 200ml. $13.99. In stock. Note: this is the 200ml full-size version, not the 100ml travel size.",
+      "price_guess": "$13.99"
+    },
+    "https://www.walmart.com/ip/cleanskin-gentle-cleanser-100ml/444444": {
+      "url": "https://www.walmart.com/ip/cleanskin-gentle-cleanser-100ml/444444",
+      "title": "CleanSkin Gentle Foaming Cleanser 100ml - Walmart.com",
+      "content": "CleanSkin Gentle Foaming Cleanser 100ml. $17.99. In stock. Same size as the submitted listing.",
+      "price_guess": "$17.99"
+    },
+    "https://www.ulta.com/p/cleanskin-gentle-foaming-cleanser-100ml": {
+      "url": "https://www.ulta.com/p/cleanskin-gentle-foaming-cleanser-100ml",
+      "title": "CleanSkin Gentle Foaming Cleanser 100ml - Ulta Beauty",
+      "content": "CleanSkin Gentle Foaming Cleanser 100ml. $19.99. In stock.",
+      "price_guess": "$19.99"
+    },
+    "https://www.beautyprices.com/cleanskin-cleanser": {
+      "url": "https://www.beautyprices.com/cleanskin-cleanser",
+      "title": "CleanSkin Cleanser Price Comparison",
+      "content": "CleanSkin Gentle Foaming Cleanser 100ml market price: $17 to $21. The 200ml version at Amazon ($13.99) is a different size and should not be compared directly with the 100ml product.",
+      "price_guess": null
+    }
+  }
+}

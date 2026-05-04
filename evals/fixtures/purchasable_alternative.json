@@ -1,0 +1,57 @@
+{
+  "extraction": {
+    "product_name": "ReviveEye Peptide Eye Cream 30ml",
+    "listed_price": "$25.99",
+    "merchant": "regularstore.com"
+  },
+  "identity": {
+    "value": "ReviveEye Peptide Eye Cream 30ml",
+    "source": "product_name"
+  },
+  "submitted_page": {
+    "url": "https://www.regularstore.com/products/eye-cream-30ml",
+    "title": "ReviveEye Peptide Eye Cream 30ml",
+    "content": "ReviveEye Peptide Eye Cream 30ml. Anti-aging peptide formula. Price: $25.99.",
+    "price_guess": "$25.99"
+  },
+  "search_results": [
+    {
+      "title": "ReviveEye Peptide Eye Cream 30ml - eBay",
+      "url": "https://www.ebay.com/itm/reviveeye-peptide-eye-cream-30ml/123456789",
+      "snippet": "ReviveEye Peptide Eye Cream 30ml. $9.99. This listing has ended.",
+      "score": 0.88
+    },
+    {
+      "title": "ReviveEye Peptide Eye Cream 30ml - Amazon",
+      "url": "https://www.amazon.com/reviveeye-peptide-eye-cream/dp/B00EXAMPLE8",
+      "snippet": "ReviveEye Peptide Eye Cream 30ml. $16.49. In stock. Ships from Amazon.",
+      "score": 0.93
+    },
+    {
+      "title": "ReviveEye Peptide Eye Cream 30ml - Walmart",
+      "url": "https://www.walmart.com/ip/reviveeye-peptide-eye-cream-30ml/555555",
+      "snippet": "ReviveEye Peptide Eye Cream 30ml. $24.99. In stock.",
+      "score": 0.79
+    }
+  ],
+  "fetched_pages": {
+    "https://www.ebay.com/itm/reviveeye-peptide-eye-cream-30ml/123456789": {
+      "url": "https://www.ebay.com/itm/reviveeye-peptide-eye-cream-30ml/123456789",
+      "title": "ReviveEye Peptide Eye Cream 30ml - eBay",
+      "content": "ReviveEye Peptide Eye Cream 30ml. Was $9.99. This listing has ended. Item is no longer available. Sold out.",
+      "price_guess": "$9.99"
+    },
+    "https://www.amazon.com/reviveeye-peptide-eye-cream/dp/B00EXAMPLE8": {
+      "url": "https://www.amazon.com/reviveeye-peptide-eye-cream/dp/B00EXAMPLE8",
+      "title": "ReviveEye Peptide Eye Cream 30ml",
+      "content": "ReviveEye Peptide Eye Cream 30ml. $16.49. In stock. Ships from and sold by Amazon.",
+      "price_guess": "$16.49"
+    },
+    "https://www.walmart.com/ip/reviveeye-peptide-eye-cream-30ml/555555": {
+      "url": "https://www.walmart.com/ip/reviveeye-peptide-eye-cream-30ml/555555",
+      "title": "ReviveEye Peptide Eye Cream 30ml - Walmart.com",
+      "content": "ReviveEye Peptide Eye Cream 30ml. $24.99. In stock.",
+      "price_guess": "$24.99"
+    }
+  }
+}

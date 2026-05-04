@@ -1,0 +1,69 @@
+{
+  "extraction": {
+    "product_name": "DailyCare Gentle Face Wash 200ml",
+    "listed_price": "$18.99",
+    "merchant": "samplestore.com"
+  },
+  "identity": {
+    "value": "DailyCare Gentle Face Wash 200ml",
+    "source": "product_name"
+  },
+  "submitted_page": {
+    "url": "https://www.samplestore.com/products/daily-face-wash-200ml",
+    "title": "DailyCare Gentle Face Wash 200ml",
+    "content": "DailyCare Gentle Face Wash 200ml. A gentle daily cleanser suitable for all skin types. Price: $18.99.",
+    "price_guess": "$18.99"
+  },
+  "search_results": [
+    {
+      "title": "DailyCare Gentle Face Wash 200ml - Amazon",
+      "url": "https://www.amazon.com/dailycare-face-wash/dp/B00EXAMPLE1",
+      "snippet": "DailyCare Gentle Face Wash 200ml. $17.99. Free shipping with Prime. In stock.",
+      "score": 0.92
+    },
+    {
+      "title": "DailyCare Gentle Face Wash 200ml - Walmart",
+      "url": "https://www.walmart.com/ip/dailycare-face-wash-200ml/111111",
+      "snippet": "DailyCare Gentle Face Wash 200ml. $19.49. Available online and in store.",
+      "score": 0.88
+    },
+    {
+      "title": "DailyCare Gentle Face Wash 200ml - Ulta Beauty",
+      "url": "https://www.ulta.com/p/dailycare-gentle-face-wash-200ml",
+      "snippet": "DailyCare Gentle Face Wash 200ml. $20.00. In stock. Free shipping on orders over $35.",
+      "score": 0.83
+    },
+    {
+      "title": "DailyCare Gentle Face Wash Review - BeautyBlog",
+      "url": "https://www.beautyblog.com/dailycare-face-wash-review",
+      "snippet": "DailyCare Gentle Face Wash 200ml typically retails for $17 to $21 across major beauty retailers. A solid mid-range cleanser.",
+      "score": 0.72
+    }
+  ],
+  "fetched_pages": {
+    "https://www.amazon.com/dailycare-face-wash/dp/B00EXAMPLE1": {
+      "url": "https://www.amazon.com/dailycare-face-wash/dp/B00EXAMPLE1",
+      "title": "DailyCare Gentle Face Wash 200ml",
+      "content": "DailyCare Gentle Face Wash 200ml. Gentle cleanser for all skin types. Price: $17.99. In stock. Ships from and sold by Amazon.",
+      "price_guess": "$17.99"
+    },
+    "https://www.walmart.com/ip/dailycare-face-wash-200ml/111111": {
+      "url": "https://www.walmart.com/ip/dailycare-face-wash-200ml/111111",
+      "title": "DailyCare Gentle Face Wash 200ml - Walmart.com",
+      "content": "DailyCare Gentle Face Wash 200ml. $19.49. In stock. Free pickup available.",
+      "price_guess": "$19.49"
+    },
+    "https://www.ulta.com/p/dailycare-gentle-face-wash-200ml": {
+      "url": "https://www.ulta.com/p/dailycare-gentle-face-wash-200ml",
+      "title": "DailyCare Gentle Face Wash 200ml - Ulta Beauty",
+      "content": "DailyCare Gentle Face Wash 200ml. $20.00. In stock.",
+      "price_guess": "$20.00"
+    },
+    "https://www.beautyblog.com/dailycare-face-wash-review": {
+      "url": "https://www.beautyblog.com/dailycare-face-wash-review",
+      "title": "DailyCare Gentle Face Wash Review",
+      "content": "DailyCare Gentle Face Wash 200ml is a reliable daily cleanser. It typically sells for $17 to $21 at major retailers. The samplestore.com price of $18.99 is right in the middle of the market range.",
+      "price_guess": null
+    }
+  }
+}
