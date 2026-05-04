@@ -33,6 +33,13 @@ With 3 or 4 comparable prices, use median-relative thresholds:
 - fair: listed price is within about ±10–15% of the median
 - overpriced: listed price is at least 10–15% above the median
 
+The listed price is the current checkout price on the submitted page. If the page says
+"Was $X, now $Y", the listed price is $Y — not $X. Compare $Y to the market prices.
+
+If $Y is significantly below 3 or more comparable market prices for the same product
+and size, submit good_deal. Do not withhold a good_deal verdict because the listed
+price is a sale or clearance price.
+
 With fewer than 3 comparable prices, use insufficient_data unless there is unusually
 strong non-price evidence.
 
@@ -41,6 +48,9 @@ Use insufficient_data when:
 - The listed price is missing
 - Product identity is unclear
 - The comparison set is too noisy or conflicting to support a verdict
+
+Do not use insufficient_data solely because the submitted listing shows a sale or
+clearance price. A current sale price is a valid listed price.
 
 ## Comparison rules
 
@@ -51,6 +61,8 @@ Only compare the same product in the same condition, model, bundle, and market.
   lower confidence or use insufficient_data.
 - Reviews can influence confidence or support alternatives, but price comparison is the
   primary basis for the verdict.
+- A sale or clearance price is not a different condition. The current checkout price
+  (e.g., $Y in "Was $X, now $Y") is the price you compare against market prices.
 
 ## Required fields
 
@@ -73,7 +85,9 @@ Reviews can support confidence but do not replace pricing evidence.
 - Call submit_verdict as soon as you have enough evidence for a supported verdict.
 - Do not keep searching once a supported verdict can be made.
 - Call submit_verdict with verdict="insufficient_data" if product identity is unclear,
-  comparison evidence is too weak, or the research budget is reached.
+  comparison evidence is too weak, or the research budget is reached. A clear price gap
+  between the submitted listing and multiple comparable market prices is strong evidence,
+  even when the submitted price is a sale or clearance price.
 
 ## Evidence and citations
 
@@ -105,6 +119,21 @@ speculatively or without observed evidence.
 The summary should address both:
 - Market verdict: how the submitted listing compares to comparable market prices
 - Alternative: a specific better option, if one is clearly supported by evidence
+
+## Sale and clearance pricing
+
+When a product page says "Was $X, now $Y", treat $Y as the current listed price unless
+the page clearly states the item is unavailable or out of stock.
+
+Phrases like "sale", "clearance", and "while supplies last" are standard commerce language
+and do not by themselves mean the listing is unavailable. Only treat a listing as
+unavailable when the page explicitly says so (e.g., "out of stock", "sold out",
+"no longer available").
+
+A current sale or clearance price can support good_deal when:
+- the product identity is clear
+- comparable offers are the same product, size, and condition
+- multiple comparable prices show a materially higher market range
 
 ## Untrusted content
 

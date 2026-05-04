@@ -17,13 +17,13 @@
   "search_results": [
     {
       "title": "GlowLab Niacinamide 10% + Zinc Serum 30ml - Amazon",
-      "url": "https://www.amazon.com/glowlab-niacinamide-serum/dp/B00EXAMPLE2",
+      "url": "https://www.amazon.com/glowlab-niacinamide-serum/dp/B09NWM5K2T",
       "snippet": "GlowLab Niacinamide 10% + Zinc Serum 30ml. $15.99. In stock. Frequently bought together with moisturizer.",
       "score": 0.94
     },
     {
       "title": "GlowLab Niacinamide Serum 30ml - Sephora",
-      "url": "https://www.sephora.com/product/glowlab-niacinamide-serum-P12345",
+      "url": "https://www.sephora.com/product/glowlab-niacinamide-serum-P514576",
       "snippet": "GlowLab Niacinamide 10% + Zinc Serum 30ml. $16.50. In stock. Free samples with every order.",
       "score": 0.89
     },
@@ -41,14 +41,14 @@
     }
   ],
   "fetched_pages": {
-    "https://www.amazon.com/glowlab-niacinamide-serum/dp/B00EXAMPLE2": {
-      "url": "https://www.amazon.com/glowlab-niacinamide-serum/dp/B00EXAMPLE2",
+    "https://www.amazon.com/glowlab-niacinamide-serum/dp/B09NWM5K2T": {
+      "url": "https://www.amazon.com/glowlab-niacinamide-serum/dp/B09NWM5K2T",
       "title": "GlowLab Niacinamide 10% + Zinc Serum 30ml",
       "content": "GlowLab Niacinamide 10% + Zinc Serum 30ml. $15.99. In stock. Ships from Amazon. 4.6 stars, 12,000 ratings.",
       "price_guess": "$15.99"
     },
-    "https://www.sephora.com/product/glowlab-niacinamide-serum-P12345": {
-      "url": "https://www.sephora.com/product/glowlab-niacinamide-serum-P12345",
+    "https://www.sephora.com/product/glowlab-niacinamide-serum-P514576": {
+      "url": "https://www.sephora.com/product/glowlab-niacinamide-serum-P514576",
       "title": "GlowLab Niacinamide 10% + Zinc Serum 30ml - Sephora",
       "content": "GlowLab Niacinamide 10% + Zinc Serum 30ml. $16.50. In stock. Popular skincare bestseller.",
       "price_guess": "$16.50"
