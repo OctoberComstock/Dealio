@@ -30,7 +30,7 @@ evals, and deployment.
 
 I also used the project to start building production intuition in Python and FastAPI after spending
 most of my career in Ruby on Rails. The project was built with AI-assisted development: I used
-coding agents to accelerate implementation and help me learn these new tech stacks and systems while driving the product direction,architecture
+coding agents to accelerate implementation and help me learn these new tech stacks and systems while driving the product direction, architecture
 decisions, PR review, debugging, testing strategy, and eval design.
 
 ## Key features
