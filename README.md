@@ -1,6 +1,6 @@
 # Dealio
 
-Dealio is a small FastAPI app that checks whether a product listing looks like a good deal.
+Dealio is a FastAPI-based product research app that checks whether a product listing looks like a good deal.
 Paste in a product URL, and Dealio extracts the listing details, researches comparable offers,
 validates the evidence, and returns a structured verdict with citations.
 
