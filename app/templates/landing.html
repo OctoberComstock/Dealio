@@ -137,13 +137,16 @@
         pointer-events: none;
     }
 
+    .screenshot-card {
+        max-height: 460px;
+    }
+
     .screenshot {
         display: block;
         width: 100%;
         height: auto;
-        max-height: 460px;
-        object-fit: cover;
-        object-position: top;
+        /* push the image up so the nav-back link at the top of each result page is hidden */
+        margin-top: -90px;
     }
 
     .screenshot-label {
