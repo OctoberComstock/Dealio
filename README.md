@@ -29,9 +29,7 @@ practical AI agent architecture: tool use, live web research, evidence grounding
 evals, and deployment.
 
 I also used the project to start building production intuition in Python and FastAPI after spending
-most of my career in Ruby on Rails. The project was built with AI-assisted development: I used
-coding agents to accelerate implementation and help me learn these new tech stacks and systems while driving the product direction, architecture
-decisions, PR review, debugging, testing strategy, and eval design.
+most of my career in Ruby on Rails. The project was built with AI-assisted development: I used coding agents and ChatGPT to accelerate implementation, help structure the work, and ramp up on Python, FastAPI, and agentic systems. My focus was on product and engineering judgment: defining the intended behavior, identifying important edge cases, evaluating tradeoffs, reviewing PRs, debugging failures, and validating behavior through manual testing and evals.
 
 ## Key features
 
