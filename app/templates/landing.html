@@ -118,6 +118,7 @@
     }
 
     .screenshot-card {
+        aspect-ratio: 4 / 3;
         border-radius: var(--radius-lg);
         border: 1px solid var(--border);
         overflow: hidden;
@@ -137,16 +138,26 @@
         pointer-events: none;
     }
 
-    .screenshot-card {
-        max-height: 460px;
-    }
-
     .screenshot {
         display: block;
         width: 100%;
         height: auto;
-        /* push the image up so the nav-back link at the top of each result page is hidden */
-        margin-top: -90px;
+    }
+
+    /*
+     * Each screenshot includes the "← Check another product" nav link at the top.
+     * translateY(-X%) is relative to the image's own rendered height, so the offset
+     * stays proportional at any viewport width. The percentages are derived from the
+     * actual file dimensions: nav area is ~170px in both 2x-retina screenshots, which
+     * is 10.75% of the good-deal image height (1664px) and 8.06% of the overpriced
+     * image height (1864px).
+     */
+    .screenshot-card-good-deal .screenshot {
+        transform: translateY(-11%);
+    }
+
+    .screenshot-card-overpriced .screenshot {
+        transform: translateY(-8.5%);
     }
 
     .screenshot-label {
@@ -341,7 +352,7 @@
     <section class="section">
         <p class="section-heading">Example results</p>
         <div class="screenshots">
-            <div class="screenshot-card">
+            <div class="screenshot-card screenshot-card-overpriced">
                 <span class="screenshot-label">Overpriced listing</span>
                 <img
                     class="screenshot"
@@ -349,7 +360,7 @@
                     alt="Example Dealio result showing an overpriced listing with a recommended alternative"
                 />
             </div>
-            <div class="screenshot-card">
+            <div class="screenshot-card screenshot-card-good-deal">
                 <span class="screenshot-label">Good deal</span>
                 <img
                     class="screenshot"
