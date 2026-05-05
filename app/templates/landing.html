@@ -142,22 +142,28 @@
         display: block;
         width: 100%;
         height: auto;
+        /*
+         * margin-top as a % of container width scales the layout offset with the
+         * viewport, so the net visible start point (layout offset minus transform
+         * shift) consistently lands inside the nav-back margin area — which is the
+         * page's cream background — giving natural breathing room above the title
+         * at any viewport size.
+         */
+        margin-top: 4.5%;
     }
 
     /*
-     * Each screenshot includes the "← Check another product" nav link at the top.
-     * translateY(-X%) is relative to the image's own rendered height, so the offset
-     * stays proportional at any viewport width. The percentages are derived from the
-     * actual file dimensions: nav area is ~170px in both 2x-retina screenshots, which
-     * is 10.75% of the good-deal image height (1664px) and 8.06% of the overpriced
-     * image height (1864px).
+     * translateY(-X%) is relative to each image's own rendered height, so it stays
+     * proportional at any viewport width. Values are derived from each file's 2x
+     * retina dimensions: the nav area (~170px) is 10.5% of the 1664px good-deal
+     * image and 9.5% of the 1864px overpriced image.
      */
     .screenshot-card-good-deal .screenshot {
-        transform: translateY(-11%);
+        transform: translateY(-9.5%);
     }
 
     .screenshot-card-overpriced .screenshot {
-        transform: translateY(-8.5%);
+        transform: translateY(-10.5%);
     }
 
     .screenshot-label {
