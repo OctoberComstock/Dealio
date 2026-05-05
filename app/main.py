@@ -3,6 +3,8 @@ import logging.config
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
@@ -44,5 +46,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Dealio", description="Product deal research tool", lifespan=lifespan)
 
+app.add_middleware(SessionMiddleware, secret_key=settings.session_secret_key, max_age=86400)
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(health.router)
 app.include_router(pages.router)

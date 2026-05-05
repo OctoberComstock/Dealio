@@ -1,3 +1,4 @@
+import hmac
 import logging
 import time
 from datetime import datetime
@@ -30,6 +31,7 @@ class ResearchStatusResponse(BaseModel):
     result_url: str
     error_message: str | None
 
+
 _url_validator = TypeAdapter(HttpUrl)
 
 _RESEARCH_FAILURE_MESSAGE = (
@@ -46,6 +48,10 @@ def _validate_product_url(raw_url: str) -> str | None:
     except ValidationError:
         return "Please enter a valid product URL starting with http:// or https://"
     return None
+
+
+def _has_demo_access(request: Request) -> bool:
+    return bool(request.session.get("demo_access"))
 
 
 async def _run_research_in_background(run_id: str, normalized: str) -> None:
@@ -92,16 +98,45 @@ async def _run_research_in_background(run_id: str, normalized: str) -> None:
 
 
 @router.get("/", response_class=HTMLResponse)
-async def homepage(request: Request):
+async def landing_page(request: Request, error: str | None = None):
+    return templates.TemplateResponse(
+        request=request,
+        name="landing.html",
+        context={
+            "has_access": _has_demo_access(request),
+            "show_password_error": error == "invalid_password",
+        },
+    )
+
+
+@router.post("/unlock")
+async def unlock_demo(request: Request, password: str = Form(default="")):
+    configured_password = settings.dealio_demo_password
+    password_is_correct = bool(configured_password) and hmac.compare_digest(
+        password, configured_password
+    )
+    if password_is_correct:
+        request.session["demo_access"] = True
+        return RedirectResponse(url="/analyze", status_code=303)
+    return RedirectResponse(url="/?error=invalid_password", status_code=303)
+
+
+@router.get("/analyze", response_class=HTMLResponse)
+async def analyze_page(request: Request):
+    if not _has_demo_access(request):
+        return RedirectResponse(url="/", status_code=303)
     return templates.TemplateResponse(request=request, name="index.html")
 
 
-@router.post("/", response_class=HTMLResponse)
+@router.post("/analyze", response_class=HTMLResponse)
 async def submit_product_url(
     request: Request,
     background_tasks: BackgroundTasks,
     product_url: str = Form(default=""),
 ):
+    if not _has_demo_access(request):
+        return RedirectResponse(url="/", status_code=303)
+
     error = _validate_product_url(product_url)
     if error is not None:
         return templates.TemplateResponse(

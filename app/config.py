@@ -25,5 +25,8 @@ class Settings(BaseSettings):
     render_page_timeout_seconds: int = 30
     log_level: str = "DEBUG"
 
+    dealio_demo_password: str = ""
+    session_secret_key: str = "dev-only-secret-key-change-in-production"
+
 
 settings = Settings()
