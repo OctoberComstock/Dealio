@@ -114,11 +114,17 @@
     .screenshots {
         display: flex;
         flex-direction: column;
-        gap: 1.25rem;
+        gap: 2.25rem;
+    }
+
+    .screenshot-example {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
     }
 
     .screenshot-card {
-        aspect-ratio: 4 / 3;
+        max-height: 420px;
         border-radius: var(--radius-lg);
         border: 1px solid var(--border);
         overflow: hidden;
@@ -142,45 +148,14 @@
         display: block;
         width: 100%;
         height: auto;
-        /*
-         * margin-top as a % of container width scales the layout offset with the
-         * viewport, so the net visible start point (layout offset minus transform
-         * shift) consistently lands inside the nav-back margin area — which is the
-         * page's cream background — giving natural breathing room above the title
-         * at any viewport size.
-         */
-        margin-top: 4.5%;
-    }
-
-    /*
-     * translateY(-X%) is relative to each image's own rendered height, so it stays
-     * proportional at any viewport width. Values are derived from each file's 2x
-     * retina dimensions: the nav area (~170px) is 10.5% of the 1664px good-deal
-     * image and 9.5% of the 1864px overpriced image.
-     */
-    .screenshot-card-good-deal .screenshot {
-        transform: translateY(-9.5%);
-    }
-
-    .screenshot-card-overpriced .screenshot {
-        transform: translateY(-10.5%);
     }
 
     .screenshot-label {
-        position: absolute;
-        top: 0.75rem;
-        left: 0.75rem;
-        font-size: 0.7rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        padding: 0.3rem 0.7rem;
-        border-radius: var(--radius-pill);
-        background: rgba(253, 250, 246, 0.92);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        border: 1px solid var(--border);
-        color: var(--text-secondary);
+        align-self: flex-start;
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0 0 0 0.25rem;
+        color: var(--text-primary);
     }
 
     .capability-list {
@@ -301,6 +276,10 @@
             padding-top: 1.5rem;
         }
 
+        .screenshot-card {
+            max-height: 320px;
+        }
+
         .hero-headline {
             font-size: 2rem;
         }
@@ -358,21 +337,25 @@
     <section class="section">
         <p class="section-heading">Example results</p>
         <div class="screenshots">
-            <div class="screenshot-card screenshot-card-overpriced">
-                <span class="screenshot-label">Overpriced listing</span>
-                <img
-                    class="screenshot"
-                    src="/static/screenshots/result-overpriced.png"
-                    alt="Example Dealio result showing an overpriced listing with a recommended alternative"
-                />
+            <div class="screenshot-example">
+                <p class="screenshot-label">Overpriced result</p>
+                <div class="screenshot-card screenshot-card-overpriced">
+                    <img
+                        class="screenshot"
+                        src="/static/screenshots/result-overpriced.png"
+                        alt="Example Dealio result showing an overpriced listing with a recommended alternative"
+                    />
+                </div>
             </div>
-            <div class="screenshot-card screenshot-card-good-deal">
-                <span class="screenshot-label">Good deal</span>
-                <img
-                    class="screenshot"
-                    src="/static/screenshots/result-good-deal.png"
-                    alt="Example Dealio result showing a product priced well below market"
-                />
+            <div class="screenshot-example">
+                <p class="screenshot-label">Good deal result</p>
+                <div class="screenshot-card screenshot-card-good-deal">
+                    <img
+                        class="screenshot"
+                        src="/static/screenshots/result-good-deal.png"
+                        alt="Example Dealio result showing a product priced well below market"
+                    />
+                </div>
             </div>
         </div>
     </section>
