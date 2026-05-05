@@ -4,6 +4,7 @@ from unittest.mock import ANY, AsyncMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.config import settings
 from app.main import app
 from app.schemas import Confidence, EvidenceItem, ResearchResult, Verdict
 from app.tools.extract_product import ProductExtractionResult, ProductPageExtraction
@@ -60,6 +61,8 @@ FAKE_RUN_DATA_FAILED = {
     "failure_reason": "Something went wrong while researching this product. Please try again.",
 }
 
+TEST_DEMO_PASSWORD = "test-demo-password"
+
 
 @pytest.fixture
 async def client():
@@ -67,49 +70,126 @@ async def client():
         yield ac
 
 
-# --- Homepage ---
+@pytest.fixture
+async def authenticated_client():
+    with patch.object(settings, "dealio_demo_password", TEST_DEMO_PASSWORD):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            await ac.post("/unlock", data={"password": TEST_DEMO_PASSWORD})
+            yield ac
 
-async def test_homepage_renders(client):
+
+# --- Landing page ---
+
+async def test_landing_page_renders(client):
     response = await client.get("/")
     assert response.status_code == 200
-    assert "Dealio" in response.text
+    assert "dealio" in response.text
+
+
+async def test_landing_page_has_github_link(client):
+    response = await client.get("/")
+    assert "github.com/OctoberComstock/Dealio" in response.text
+
+
+async def test_landing_page_has_password_form(client):
+    response = await client.get("/")
+    assert 'name="password"' in response.text
+    assert 'action="/unlock"' in response.text
+
+
+async def test_landing_page_does_not_have_url_form(client):
+    response = await client.get("/")
+    assert 'name="product_url"' not in response.text
+
+
+async def test_landing_page_shows_start_analysis_link_when_already_unlocked(authenticated_client):
+    response = await authenticated_client.get("/")
+    assert response.status_code == 200
+    assert 'href="/analyze"' in response.text
+    assert "demo access" in response.text.lower()
+
+
+# --- Demo access gate ---
+
+async def test_analyze_page_redirects_to_landing_without_demo_access(client):
+    response = await client.get("/analyze")
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+
+async def test_submit_redirects_to_landing_without_demo_access(client):
+    response = await client.post("/analyze", data={"product_url": "https://example.com/product"})
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+
+async def test_unlock_with_wrong_password_redirects_with_error(client):
+    with patch.object(settings, "dealio_demo_password", TEST_DEMO_PASSWORD):
+        response = await client.post("/unlock", data={"password": "wrong-password"})
+    assert response.status_code == 303
+    assert "error=invalid_password" in response.headers["location"]
+
+
+async def test_unlock_with_correct_password_redirects_to_analyze(client):
+    with patch.object(settings, "dealio_demo_password", TEST_DEMO_PASSWORD):
+        response = await client.post("/unlock", data={"password": TEST_DEMO_PASSWORD})
+    assert response.status_code == 303
+    assert response.headers["location"] == "/analyze"
+
+
+async def test_unlock_with_empty_configured_password_rejects_any_password(client):
+    with patch.object(settings, "dealio_demo_password", ""):
+        response = await client.post("/unlock", data={"password": ""})
+    assert response.status_code == 303
+    assert "error=invalid_password" in response.headers["location"]
+
+
+async def test_landing_page_shows_error_for_invalid_password(client):
+    response = await client.get("/?error=invalid_password")
+    assert response.status_code == 200
+    assert "isn't right" in response.text
+
+
+async def test_analyze_page_renders_with_demo_access(authenticated_client):
+    response = await authenticated_client.get("/analyze")
+    assert response.status_code == 200
     assert 'name="product_url"' in response.text
 
 
-async def test_homepage_loading_message_is_initially_hidden(client):
-    response = await client.get("/")
-    assert 'id="loading-message"' in response.text
-    assert "hidden" in response.text
-
-
-async def test_error_page_loading_message_is_initially_hidden(client):
-    response = await client.post("/", data={"product_url": "not-a-url"})
+async def test_analyze_page_loading_message_is_initially_hidden(authenticated_client):
+    response = await authenticated_client.get("/analyze")
     assert 'id="loading-message"' in response.text
     assert "hidden" in response.text
 
 
 # --- Submit ---
 
-async def test_submit_empty_url_returns_error(client):
-    response = await client.post("/", data={"product_url": ""})
+async def test_submit_empty_url_returns_error(authenticated_client):
+    response = await authenticated_client.post("/analyze", data={"product_url": ""})
     assert response.status_code == 422
     assert "Please enter a product URL" in response.text
 
 
-async def test_submit_invalid_url_returns_error(client):
-    response = await client.post("/", data={"product_url": "not-a-url"})
+async def test_submit_invalid_url_returns_error(authenticated_client):
+    response = await authenticated_client.post("/analyze", data={"product_url": "not-a-url"})
     assert response.status_code == 422
     assert "valid" in response.text.lower()
 
 
-async def test_submit_invalid_url_preserves_input(client):
+async def test_submit_invalid_url_preserves_input(authenticated_client):
     bad_url = "htp://bad"
-    response = await client.post("/", data={"product_url": bad_url})
+    response = await authenticated_client.post("/analyze", data={"product_url": bad_url})
     assert response.status_code == 422
     assert bad_url in response.text
 
 
-async def test_submit_valid_url_redirects_to_loading_page(client):
+async def test_submit_error_page_loading_message_is_initially_hidden(authenticated_client):
+    response = await authenticated_client.post("/analyze", data={"product_url": "not-a-url"})
+    assert 'id="loading-message"' in response.text
+    assert "hidden" in response.text
+
+
+async def test_submit_valid_url_redirects_to_loading_page(authenticated_client):
     url = "https://www.amazon.com/dp/B08N5WRWNW"
     with (
         patch(
@@ -122,12 +202,12 @@ async def test_submit_valid_url_redirects_to_loading_page(client):
             new_callable=AsyncMock,
         ),
     ):
-        response = await client.post("/", data={"product_url": url})
+        response = await authenticated_client.post("/analyze", data={"product_url": url})
     assert response.status_code == 303
     assert response.headers["location"] == f"/research/{FAKE_RUN_ID}/loading"
 
 
-async def test_submit_creates_run_before_agent_executes(client):
+async def test_submit_creates_run_before_agent_executes(authenticated_client):
     url = "https://www.amazon.com/dp/B08N5WRWNW"
     call_order = []
 
@@ -149,12 +229,12 @@ async def test_submit_creates_run_before_agent_executes(client):
         patch("app.routers.pages.run_research_agent", side_effect=mock_agent),
         patch("app.routers.pages.complete_research_run", new_callable=AsyncMock),
     ):
-        await client.post("/", data={"product_url": url})
+        await authenticated_client.post("/analyze", data={"product_url": url})
 
     assert call_order == ["create", "agent"]
 
 
-async def test_submit_valid_url_strips_tracking_params_before_agent(client):
+async def test_submit_valid_url_strips_tracking_params_before_agent(authenticated_client):
     url = "https://www.amazon.com/dp/B08N5WRWNW?utm_source=google"
     mock_agent = AsyncMock(return_value=FAKE_RESULT)
     with (
@@ -171,12 +251,12 @@ async def test_submit_valid_url_strips_tracking_params_before_agent(client):
         patch("app.routers.pages.run_research_agent", mock_agent),
         patch("app.routers.pages.complete_research_run", new_callable=AsyncMock),
     ):
-        await client.post("/", data={"product_url": url})
+        await authenticated_client.post("/analyze", data={"product_url": url})
     called_url = mock_agent.call_args[0][0]
     assert "utm_source" not in called_url
 
 
-async def test_submit_agent_failure_marks_run_as_failed(client):
+async def test_submit_agent_failure_marks_run_as_failed(authenticated_client):
     url = "https://www.amazon.com/dp/B08N5WRWNW"
     mock_fail = AsyncMock()
     with (
@@ -197,19 +277,19 @@ async def test_submit_agent_failure_marks_run_as_failed(client):
         ),
         patch("app.routers.pages.mark_research_run_failed", mock_fail),
     ):
-        response = await client.post("/", data={"product_url": url})
+        response = await authenticated_client.post("/analyze", data={"product_url": url})
     assert response.status_code == 303
     mock_fail.assert_awaited_once_with(ANY, FAKE_RUN_ID, ANY)
 
 
-async def test_submit_create_run_failure_returns_error_page(client):
+async def test_submit_create_run_failure_returns_error_page(authenticated_client):
     url = "https://www.amazon.com/dp/B08N5WRWNW"
     with patch(
         "app.routers.pages.create_research_run",
         new_callable=AsyncMock,
         side_effect=Exception("DB down"),
     ):
-        response = await client.post("/", data={"product_url": url})
+        response = await authenticated_client.post("/analyze", data={"product_url": url})
     assert response.status_code == 500
     assert "went wrong" in response.text.lower()
 
