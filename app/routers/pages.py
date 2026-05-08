@@ -17,6 +17,7 @@ from app.database import (
     mark_research_run_failed,
 )
 from app.schemas import ResearchResult
+from app.services.result_page_view import build_result_page_view
 from app.tools.extract_product import extract_product
 from app.tools.normalize_url import normalize_url
 from app.tools.product_identity import infer_product_identity
@@ -208,9 +209,10 @@ async def result_page(request: Request, run_id: str):
         return RedirectResponse(url=f"/research/{run_id}/loading", status_code=303)
 
     result = ResearchResult.model_validate(run["result_payload"])
+    result_view = build_result_page_view(result)
     checked_at = datetime.fromisoformat(run["checked_at"])
     return templates.TemplateResponse(
         request=request,
         name="result.html",
-        context={"result": result, "checked_at": checked_at},
+        context={"result": result, "result_view": result_view, "checked_at": checked_at},
     )

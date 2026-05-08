@@ -49,6 +49,10 @@ FAKE_RUN_DATA = {
 
 def make_completed_run_data_with_verdict(verdict: Verdict) -> dict:
     result = FAKE_RESULT.model_copy(update={"verdict": verdict})
+    return make_completed_run_data(result)
+
+
+def make_completed_run_data(result: ResearchResult) -> dict:
     return {
         "id": FAKE_RUN_ID,
         "status": "completed",
@@ -475,6 +479,65 @@ async def test_result_page_displays_summary(client):
     ):
         response = await client.get(f"/result/{FAKE_RUN_ID}")
     assert "good deal based on market research" in response.text
+
+
+async def test_result_page_displays_purchase_decision_sections(client):
+    with patch(
+        "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=FAKE_RUN_DATA
+    ):
+        response = await client.get(f"/result/{FAKE_RUN_ID}")
+
+    assert "example.com" in response.text
+    assert "Listed price" in response.text
+    assert "Dealio recommendation" in response.text
+    assert "Price vs market" in response.text
+    assert "Prices and availability change frequently" in response.text
+
+
+async def test_result_page_displays_market_snapshot_from_evidence_prices(client):
+    result = FAKE_RESULT.model_copy(
+        update={
+            "listed_price": "$19.99",
+            "evidence": [
+                EvidenceItem(
+                    text="Amazon lists the same item at $19.99.",
+                    source_url="https://example.com/amazon",
+                ),
+                EvidenceItem(
+                    text="Target lists the same item at $24.99.",
+                    source_url="https://example.com/target",
+                ),
+                EvidenceItem(
+                    text="Brand store lists the same item at $34.99.",
+                    source_url="https://example.com/brand",
+                ),
+            ],
+        }
+    )
+    run_data = make_completed_run_data(result)
+
+    with patch(
+        "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=run_data
+    ):
+        response = await client.get(f"/result/{FAKE_RUN_ID}")
+
+    assert "Submitted" in response.text
+    assert "$19.99" in response.text
+    assert "$24.99" in response.text
+    assert "$34.99" in response.text
+
+
+async def test_result_page_hides_market_modules_for_insufficient_data(client):
+    result = FAKE_RESULT.model_copy(update={"verdict": Verdict.insufficient_data})
+    run_data = make_completed_run_data(result)
+
+    with patch(
+        "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=run_data
+    ):
+        response = await client.get(f"/result/{FAKE_RUN_ID}")
+
+    assert "Not Enough Data" in response.text
+    assert "Price vs market" not in response.text
 
 
 async def test_result_page_displays_evidence_bullets(client):
