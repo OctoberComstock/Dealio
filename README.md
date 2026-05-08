@@ -16,7 +16,7 @@ Dealio takes one product URL and runs one research pass:
 3. Search for current comparable listings.
 4. Fetch useful result pages for more evidence.
 5. Validate comparable offers for product identity, size, availability, and purchasability.
-6. Return a verdict: `Good Deal`, `Fair`, `Overpriced`, or `Insufficient Data`.
+6. Return a verdict: `Buy`, `Wait`, `Don't Buy`, or `Not Enough Data`.
 7. Include evidence bullets with source URLs and, when clearly supported, a cheaper alternative.
 
 The goal is not to scrape every store on the internet. The goal is to make a focused, explainable
@@ -93,7 +93,7 @@ Dealio uses both deterministic tests and model-in-the-loop evals:
 
 Current eval cases cover:
 
-- Clear good-deal, fair, and overpriced verdicts
+- Clear buy, wait, and don't-buy recommendations
 - Best purchasable alternative selection
 - Avoiding sold-out listings
 - Rejecting cheaper listings for the wrong size or variant
