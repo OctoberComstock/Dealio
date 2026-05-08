@@ -222,7 +222,7 @@
 
     <div class="verdict-row">
         <span class="verdict-badge {{ result.verdict.value.replace('_', '-') }}">
-            {{ result.verdict.value.replace('_', ' ').title() }}
+            {{ result.verdict.display_label }}
         </span>
         <span class="confidence-label">{{ result.confidence.value.title() }} confidence</span>
     </div>

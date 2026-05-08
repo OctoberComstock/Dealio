@@ -11,6 +11,17 @@ class Verdict(str, Enum):
     insufficient_data = "insufficient_data"
     failed = "failed"
 
+    @property
+    def display_label(self) -> str:
+        verdict_display_labels = {
+            Verdict.good_deal: "Buy",
+            Verdict.fair: "Wait",
+            Verdict.overpriced: "Don't Buy",
+            Verdict.insufficient_data: "Not Enough Data",
+            Verdict.failed: "Failed",
+        }
+        return verdict_display_labels[self]
+
 
 class Confidence(str, Enum):
     high = "high"

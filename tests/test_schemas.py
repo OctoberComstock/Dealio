@@ -42,6 +42,19 @@ def test_all_verdict_values_are_accepted():
         assert result.verdict == verdict
 
 
+def test_verdict_display_labels_are_decision_oriented():
+    expected_labels = {
+        Verdict.good_deal: "Buy",
+        Verdict.fair: "Wait",
+        Verdict.overpriced: "Don't Buy",
+        Verdict.insufficient_data: "Not Enough Data",
+        Verdict.failed: "Failed",
+    }
+
+    for verdict, expected_label in expected_labels.items():
+        assert verdict.display_label == expected_label
+
+
 def test_all_confidence_values_are_accepted():
     for confidence in Confidence:
         result = ResearchResult(**make_result(confidence=confidence))

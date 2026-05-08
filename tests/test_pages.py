@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from html import unescape
 from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
@@ -44,6 +45,18 @@ FAKE_RUN_DATA = {
     "checked_at": FAKE_CHECKED_AT.isoformat(),
     "failure_reason": None,
 }
+
+
+def make_completed_run_data_with_verdict(verdict: Verdict) -> dict:
+    result = FAKE_RESULT.model_copy(update={"verdict": verdict})
+    return {
+        "id": FAKE_RUN_ID,
+        "status": "completed",
+        "result_payload": result.model_dump(mode="json"),
+        "checked_at": FAKE_CHECKED_AT.isoformat(),
+        "failure_reason": None,
+    }
+
 
 FAKE_RUN_DATA_RUNNING = {
     "id": FAKE_RUN_ID,
@@ -430,12 +443,22 @@ async def test_result_page_displays_product_name(client):
     assert "Test Widget" in response.text
 
 
-async def test_result_page_displays_verdict(client):
+@pytest.mark.parametrize(
+    ("verdict", "expected_label"),
+    [
+        (Verdict.good_deal, "Buy"),
+        (Verdict.fair, "Wait"),
+        (Verdict.overpriced, "Don't Buy"),
+        (Verdict.insufficient_data, "Not Enough Data"),
+    ],
+)
+async def test_result_page_displays_verdict_label(client, verdict, expected_label):
+    run_data = make_completed_run_data_with_verdict(verdict)
     with patch(
-        "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=FAKE_RUN_DATA
+        "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=run_data
     ):
         response = await client.get(f"/result/{FAKE_RUN_ID}")
-    assert "Good Deal" in response.text
+    assert expected_label in unescape(response.text)
 
 
 async def test_result_page_displays_confidence(client):
