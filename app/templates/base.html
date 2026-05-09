@@ -6,19 +6,22 @@
     <title>Dealio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Aleo:wght@400;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { box-sizing: border-box; }
 
         :root {
-            --bg:              #F7F3EE;
-            --surface:         #FDFAF6;
-            --surface-raised:  #FFFFFF;
-            --border:          #E4DDD4;
-            --border-light:    #EDE8E2;
+            --font-body:       'DM Sans', system-ui, sans-serif;
+            --font-display:    'Aleo', Georgia, serif;
 
-            --text-primary:    #241A11;
-            --text-secondary:  #756B62;
+            --bg:              #F8F4EF;
+            --surface:         #FFFDF9;
+            --surface-raised:  #FFFFFF;
+            --border:          #E7DED5;
+            --border-light:    #F0E9E2;
+
+            --text-primary:    #534236;
+            --text-secondary:  #7B6D62;
             --text-muted:      #A8A09A;
 
             --accent:          #5E7B65;
@@ -36,6 +39,10 @@
             --overpriced-bg:     #F5EAEA;
             --overpriced-border: #CFA8A8;
 
+            --scale-low:     #8FA384;
+            --scale-mid:     #D8B978;
+            --scale-high:    #C88F91;
+
             --error-text:  #7A3535;
             --error-bg:    #F5ECEC;
             --error-border: #CFAAAA;
@@ -45,12 +52,12 @@
             --radius-lg:   22px;
             --radius-pill: 100px;
 
-            --shadow-sm: 0 1px 3px rgba(50, 30, 10, 0.07), 0 1px 2px rgba(50, 30, 10, 0.04);
-            --shadow-md: 0 4px 16px rgba(50, 30, 10, 0.09), 0 2px 4px rgba(50, 30, 10, 0.04);
+            --shadow-sm: 0 2px 8px rgba(50, 30, 10, 0.06), 0 1px 2px rgba(50, 30, 10, 0.04);
+            --shadow-md: 0 18px 42px rgba(50, 30, 10, 0.08), 0 2px 8px rgba(50, 30, 10, 0.05);
         }
 
         body {
-            font-family: 'DM Sans', system-ui, sans-serif;
+            font-family: var(--font-body);
             background: var(--bg);
             color: var(--text-primary);
             margin: 0;

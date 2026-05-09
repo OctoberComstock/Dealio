@@ -2,7 +2,7 @@
 {% block extra_styles %}
 <style>
     main {
-        max-width: 520px;
+        max-width: 540px;
         margin: 6rem auto 4rem;
     }
 
@@ -11,9 +11,10 @@
     }
 
     .brand-name {
-        font-size: 2.5rem;
+        font-family: var(--font-display);
+        font-size: 3rem;
         font-weight: 700;
-        letter-spacing: -0.03em;
+        letter-spacing: 0;
         color: var(--text-primary);
         margin: 0 0 0.5rem;
     }
@@ -29,7 +30,7 @@
         background: var(--surface-raised);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        padding: 1.5rem;
+        padding: 1.65rem;
         box-shadow: var(--shadow-md);
     }
 
@@ -57,8 +58,8 @@
     }
 
     .url-input:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(94, 123, 101, 0.15);
+        border-color: var(--scale-low);
+        box-shadow: 0 0 0 3px rgba(143, 163, 132, 0.22);
     }
 
     .submit-button {
@@ -66,7 +67,7 @@
         font-size: 0.95rem;
         font-family: inherit;
         font-weight: 600;
-        background: var(--accent);
+        background: var(--scale-low);
         color: #fff;
         border: none;
         border-radius: var(--radius-pill);
@@ -76,11 +77,11 @@
     }
 
     .submit-button:hover {
-        background: var(--accent-hover);
+        background: var(--accent);
     }
 
     .submit-button:disabled {
-        background: #9DB8A1;
+        background: #B6C4AE;
         cursor: not-allowed;
     }
 

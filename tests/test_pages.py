@@ -487,8 +487,7 @@ async def test_result_page_displays_purchase_decision_sections(client):
     ):
         response = await client.get(f"/result/{FAKE_RUN_ID}")
 
-    assert "example.com" in response.text
-    assert "Listed price" in response.text
+    assert "Listed on example.com" in response.text
     assert "Dealio recommendation" in response.text
     assert "Price vs market" in response.text
     assert "Prices and availability change frequently" in response.text
