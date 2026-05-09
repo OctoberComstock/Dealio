@@ -2,9 +2,9 @@
 {% block extra_styles %}
 <style>
     main {
-        max-width: 640px;
+        max-width: 680px;
         margin: 0 auto 5rem;
-        padding-top: 2.5rem;
+        padding-top: 2.25rem;
     }
 
     .site-header {
@@ -15,9 +15,10 @@
     }
 
     .brand-name {
-        font-size: 1.4rem;
+        font-family: var(--font-display);
+        font-size: 1.65rem;
         font-weight: 700;
-        letter-spacing: -0.03em;
+        letter-spacing: 0;
         color: var(--text-primary);
     }
 
@@ -33,14 +34,15 @@
     }
 
     .hero {
-        margin-bottom: 3.5rem;
+        margin-bottom: 3.75rem;
     }
 
     .hero-headline {
-        font-size: 2.75rem;
+        font-family: var(--font-display);
+        font-size: 3.15rem;
         font-weight: 700;
-        letter-spacing: -0.04em;
-        line-height: 1.1;
+        letter-spacing: 0;
+        line-height: 1.04;
         margin: 0 0 1rem;
         color: var(--text-primary);
     }
@@ -60,7 +62,7 @@
     .section-heading {
         font-size: 0.7rem;
         font-weight: 700;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
         color: var(--text-muted);
         margin: 0 0 1.25rem;
@@ -79,15 +81,21 @@
         display: flex;
         gap: 1rem;
         align-items: flex-start;
+        padding: 1rem 0;
+        border-top: 1px solid var(--border-light);
+    }
+
+    .step:last-child {
+        border-bottom: 1px solid var(--border-light);
     }
 
     .step-num {
         flex-shrink: 0;
-        width: 1.75rem;
-        height: 1.75rem;
+        width: 2rem;
+        height: 2rem;
         border-radius: 50%;
-        background: var(--surface-raised);
-        border: 1px solid var(--border);
+        background: #EEF4EC;
+        border: 1px solid #CDD8C7;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -98,7 +106,7 @@
     }
 
     .step-title {
-        font-size: 1rem;
+        font-size: 1.02rem;
         font-weight: 600;
         margin: 0 0 0.2rem;
         color: var(--text-primary);
@@ -114,13 +122,28 @@
     .screenshots {
         display: flex;
         flex-direction: column;
-        gap: 2.25rem;
+        gap: 2rem;
+    }
+
+    .section-heading + .screenshots {
+        margin-top: 1rem;
+    }
+
+    .section-intro {
+        font-size: 0.95rem;
+        color: var(--text-secondary);
+        line-height: 1.55;
+        margin: -0.55rem 0 0;
+        max-width: 34rem;
+    }
+
+    .section-intro + .screenshots {
+        margin-top: 1.45rem;
     }
 
     .screenshot-example {
         display: flex;
         flex-direction: column;
-        gap: 0.6rem;
     }
 
     .screenshot-card {
@@ -150,14 +173,6 @@
         height: auto;
     }
 
-    .screenshot-label {
-        align-self: flex-start;
-        font-size: 1rem;
-        font-weight: 600;
-        margin: 0 0 0 0.25rem;
-        color: var(--text-primary);
-    }
-
     .capability-list {
         list-style: none;
         padding: 0;
@@ -176,10 +191,14 @@
     }
 
     .capability-list li::before {
-        content: '—';
+        content: '';
         position: absolute;
+        top: 0.68rem;
         left: 0;
-        color: var(--accent);
+        width: 0.42rem;
+        height: 0.42rem;
+        border-radius: 50%;
+        background: var(--scale-low);
     }
 
     .demo-note {
@@ -193,7 +212,7 @@
         background: var(--surface-raised);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        padding: 1.5rem;
+        padding: 1.65rem;
         box-shadow: var(--shadow-md);
     }
 
@@ -221,8 +240,8 @@
     }
 
     .password-input:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(94, 123, 101, 0.15);
+        border-color: var(--scale-low);
+        box-shadow: 0 0 0 3px rgba(143, 163, 132, 0.22);
     }
 
     .submit-button {
@@ -230,7 +249,7 @@
         font-size: 0.95rem;
         font-family: inherit;
         font-weight: 600;
-        background: var(--accent);
+        background: var(--scale-low);
         color: #fff;
         border: none;
         border-radius: var(--radius-pill);
@@ -243,7 +262,7 @@
     }
 
     .submit-button:hover {
-        background: var(--accent-hover);
+        background: var(--accent);
         text-decoration: none;
     }
 
@@ -336,9 +355,9 @@
 
     <section class="section">
         <p class="section-heading">Example results</p>
+        <p class="section-intro">Completed Dealio results show the product context, verdict, market range, and cited research in one focused view.</p>
         <div class="screenshots">
             <div class="screenshot-example">
-                <p class="screenshot-label">Don't Buy result</p>
                 <div class="screenshot-card screenshot-card-overpriced">
                     <img
                         class="screenshot"
@@ -348,7 +367,6 @@
                 </div>
             </div>
             <div class="screenshot-example">
-                <p class="screenshot-label">Buy result</p>
                 <div class="screenshot-card screenshot-card-good-deal">
                     <img
                         class="screenshot"
