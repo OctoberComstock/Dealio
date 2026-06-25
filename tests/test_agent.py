@@ -166,7 +166,10 @@ async def test_agent_executes_fetch_page_tool(mock_create, extraction, identity)
     with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
         mock_fetch.return_value = fetched
         result = await run_research_agent("https://example.com/product", extraction, identity)
-    mock_fetch.assert_called_once_with("https://reviews.example.com/widget")
+    mock_fetch.assert_called_once_with(
+        "https://reviews.example.com/widget",
+        request_timeout_seconds=15,
+    )
     assert isinstance(result, ResearchResult)
 
 
@@ -249,7 +252,10 @@ async def test_fetch_page_cache_hit_does_not_decrement_budget(mock_create, extra
                 initial_fetched_page=cached_page,
             )
     # Cache hit doesn't consume the one fetch slot, so the real fetch still executes.
-    mock_fetch.assert_called_once_with("https://other.example.com/page")
+    mock_fetch.assert_called_once_with(
+        "https://other.example.com/page",
+        request_timeout_seconds=mock_settings.supporting_page_timeout_seconds,
+    )
     assert isinstance(result, ResearchResult)
 
 
@@ -337,7 +343,10 @@ async def test_fetch_page_cache_miss_for_different_url_executes_normally(
             "https://example.com/product", extraction, identity,
             initial_fetched_page=cached_page,
         )
-    mock_fetch.assert_called_once_with("https://other.example.com/page")
+    mock_fetch.assert_called_once_with(
+        "https://other.example.com/page",
+        request_timeout_seconds=15,
+    )
 
 
 async def test_fetch_page_cache_hit_logs_cache_hit_message(
@@ -384,7 +393,10 @@ async def test_fetch_page_with_no_initial_page_executes_normally(mock_create, ex
             "https://example.com/product", extraction, identity,
             initial_fetched_page=None,
         )
-    mock_fetch.assert_called_once_with("https://example.com/product")
+    mock_fetch.assert_called_once_with(
+        "https://example.com/product",
+        request_timeout_seconds=15,
+    )
 
 
 async def test_fetch_page_cache_hit_observes_both_requested_and_cached_url(
@@ -633,7 +645,10 @@ async def test_fetch_page_cache_hit_skips_network_and_comparable_candidates_are_
         )
 
     # The cache hit should have prevented a network call for the submitted URL.
-    mock_fetch.assert_called_once_with(amazon_url)
+    mock_fetch.assert_called_once_with(
+        amazon_url,
+        request_timeout_seconds=15,
+    )
     assert result.alternative is not None
     assert "amazon" in str(result.alternative.source_url).lower()
 
@@ -697,7 +712,7 @@ async def test_duplicate_search_and_fetch_url_only_appears_once_in_offer_table(
         make_response(make_tool_block("submit_verdict", amazon_verdict, "b5")),
     ]
 
-    async def fake_fetch(url: str) -> FetchedPage:
+    async def fake_fetch(url: str, **_kwargs) -> FetchedPage:
         if url == amazon_url:
             return amazon_page
         return stylevana_page
@@ -767,7 +782,7 @@ async def test_out_of_stock_candidate_excluded_from_offer_table(
         make_response(make_tool_block("submit_verdict", amazon_verdict, "b4")),
     ]
 
-    async def fake_fetch(url: str) -> FetchedPage:
+    async def fake_fetch(url: str, **_kwargs) -> FetchedPage:
         if "walmart" in url:
             return walmart_page
         return amazon_page
@@ -1517,7 +1532,7 @@ async def test_walmart_alternative_rejected_when_amazon_is_cheaper(mock_create, 
         make_response(make_tool_block("submit_verdict", verdict_amazon, "b4")),
     ]
 
-    def fetch_side_effect(url):
+    def fetch_side_effect(url, **_kwargs):
         return amazon_page if "amazon" in url else walmart_page
 
     with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
@@ -1797,7 +1812,7 @@ async def test_alternative_url_rejected_when_wrong_source_url(mock_create, extra
         _make_alternative(amazon_url, "$7.95"), evidence_urls
     )
 
-    def fetch_side_effect(url):
+    def fetch_side_effect(url, **_kwargs):
         return amazon_page if "amazon" in url else stylevana_page
 
     mock_create.side_effect = [
@@ -1859,7 +1874,7 @@ async def test_sold_out_alternative_is_rejected_with_unavailable_message(
         make_response(make_tool_block("submit_verdict", verdict_with_amazon_alt, "b4")),
     ]
 
-    def fetch_side_effect(url):
+    def fetch_side_effect(url, **_kwargs):
         return amazon_page if "amazon" in url else ebay_page
 
     with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:

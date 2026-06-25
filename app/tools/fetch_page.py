@@ -763,7 +763,16 @@ async def _validate_fetch_url_and_resolved_host(
 
 # --- Main ---
 
-async def fetch_page(url: str) -> FetchedPage:
+async def fetch_page(
+    url: str,
+    *,
+    request_timeout_seconds: float | None = None,
+) -> FetchedPage:
+    static_request_timeout = (
+        settings.request_timeout_seconds
+        if request_timeout_seconds is None
+        else request_timeout_seconds
+    )
     validated_hostnames: set[str] = set()
     dns_validation_tasks: dict[str, asyncio.Task[None]] = {}
 
@@ -785,7 +794,7 @@ async def fetch_page(url: str) -> FetchedPage:
     logger.debug("fetch_page: httpx fetch starting for %r", url)
     try:
         async with httpx.AsyncClient(
-            timeout=settings.request_timeout_seconds,
+            timeout=static_request_timeout,
             follow_redirects=True,
             event_hooks={"request": [_redirect_hook]},
         ) as client:
