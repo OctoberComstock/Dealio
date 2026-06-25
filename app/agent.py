@@ -448,15 +448,17 @@ def _evaluate_verdict_submission(
     submitted_price: float | None,
     identity_value: str,
     seen_urls: set[str],
-    offer_table_shown: bool,
 ) -> str:
     """Return the tool result content for a submit_verdict call.
 
     Returns "Verdict received." when the verdict should be accepted.
     Returns a rejection/table message when the agent must resubmit.
-    The offer table is shown at most once (on the first rejection or first
-    submission when eligible candidates exist and an alternative is present).
     """
+    def reject(reason: str, table_text: str | None = None) -> str:
+        logger.warning("Verdict submission rejected: %s", reason)
+        parts = [part for part in (table_text, reason, "Please resubmit your verdict.") if part]
+        return "\n\n".join(parts)
+
     alternative = verdict_input.get("alternative")
 
     if alternative is not None:
@@ -467,13 +469,12 @@ def _evaluate_verdict_submission(
                 "The submitted alternative is sold out or unavailable. "
                 "Please omit the alternative or choose a currently available listing."
             )
-            return f"{unavailable_rejection}\n\nPlease resubmit your verdict."
+            return reject(unavailable_rejection)
         if alt_candidate is not None and not is_purchasable_offer_candidate(alt_candidate):
-            return (
+            return reject(
                 "The submitted alternative appears to be an evidence-only page or "
                 "market-summary page, not a concrete purchasable listing. "
                 "Please omit the alternative or choose a specific purchasable product/listing page."
-                "\n\nPlease resubmit your verdict."
             )
         if (
             alt_candidate is not None
@@ -483,12 +484,11 @@ def _evaluate_verdict_submission(
         ):
             savings = (submitted_price - alt_candidate.price_amount) / submitted_price
             if savings < settings.meaningful_savings_threshold:
-                return (
+                return reject(
                     f"The submitted alternative is not meaningfully cheaper "
                     f"({savings:.1%} savings is below the "
                     f"{settings.meaningful_savings_threshold:.0%} threshold). "
                     "Please omit the alternative or find a substantially cheaper offer."
-                    "\n\nPlease resubmit your verdict."
                 )
 
     if submitted_price is None:
@@ -508,17 +508,11 @@ def _evaluate_verdict_submission(
             f"Eligible cheaper alternatives were found. Please include the lowest eligible "
             f"comparable offer as the alternative: {lowest.merchant} at ${lowest.price_amount:.2f}."
         )
-        return f"{table_text}\n\n{missing_alternative_message}\n\nPlease resubmit your verdict."
+        return reject(missing_alternative_message, table_text)
 
     rejection = _validate_alternative_is_lowest(alternative, eligible)
-
-    if not offer_table_shown:
-        if rejection:
-            return f"{table_text}\n\n{rejection}\n\nPlease resubmit your verdict."
-        return f"{table_text}\n\nPlease confirm your verdict and resubmit."
-
     if rejection:
-        return f"{table_text}\n\n{rejection}\n\nPlease resubmit your verdict."
+        return reject(rejection, table_text)
 
     return "Verdict received."
 
@@ -538,7 +532,6 @@ async def _run_agent_loop(
     )
     candidates: list[OfferCandidate] = []
     submitted_price = parse_price_amount(extraction.listed_price)
-    offer_table_shown = False
     logger.info(
         "Agent loop starting: url=%s identity=%r source=%s",
         normalized_url,
@@ -591,10 +584,9 @@ async def _run_agent_loop(
                 ]
                 tool_result_content = _evaluate_verdict_submission(
                     verdict_input, comparable_candidates, submitted_price,
-                    identity.value, seen_urls, offer_table_shown,
+                    identity.value, seen_urls,
                 )
                 if tool_result_content != "Verdict received.":
-                    offer_table_shown = True
                     verdict_input = None
                 tool_results.append({
                     "type": "tool_result",

@@ -455,7 +455,6 @@ async def test_search_web_priced_result_can_drive_offer_table(
             "is_better_reviewed": False,
         },
     }
-
     mock_create.side_effect = [
         make_response(make_tool_block("search_web", {"query": "Great Widget Amazon"}, "b1")),
         make_response(
@@ -520,6 +519,10 @@ async def test_search_web_result_without_price_does_not_become_offer_candidate(
             "is_better_reviewed": False,
         },
     }
+    verdict_without_alternative = {
+        **VALID_VERDICT,
+        "alternative": None,
+    }
 
     mock_create.side_effect = [
         make_response(make_tool_block("search_web", {"query": "Great Widget Amazon"}, "b1")),
@@ -530,7 +533,7 @@ async def test_search_web_result_without_price_does_not_become_offer_candidate(
                 "b2",
             )
         ),
-        make_response(make_tool_block("submit_verdict", stylevana_verdict, "b3")),
+        make_response(make_tool_block("submit_verdict", verdict_without_alternative, "b3")),
         make_response(make_tool_block("submit_verdict", stylevana_verdict, "b4")),
     ]
 
@@ -551,9 +554,9 @@ async def test_search_web_result_without_price_does_not_become_offer_candidate(
     assert result.alternative.price == "$11.90"
 
     messages = mock_create.call_args_list[3].kwargs["messages"]
-    confirmation_tool_result = messages[-2]["content"][0]["content"]
-    assert "www.amazon.com" not in confirmation_tool_result
-    assert "$100" not in confirmation_tool_result
+    rejection_tool_result = messages[-2]["content"][0]["content"]
+    assert "www.amazon.com" not in rejection_tool_result
+    assert "$100" not in rejection_tool_result
 
 
 async def test_price_range_search_result_is_not_eligible_as_alternative(
@@ -617,7 +620,6 @@ async def test_fetch_page_cache_hit_skips_network_and_comparable_candidates_are_
         make_response(make_tool_block("fetch_page", {"url": submitted_url}, "b1")),
         make_response(make_tool_block("fetch_page", {"url": amazon_url}, "b2")),
         make_response(make_tool_block("submit_verdict", amazon_verdict, "b3")),
-        make_response(make_tool_block("submit_verdict", amazon_verdict, "b4")),
     ]
 
     with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
@@ -751,13 +753,17 @@ async def test_out_of_stock_candidate_excluded_from_offer_table(
             "is_better_reviewed": False,
         },
     }
+    verdict_without_alternative = {
+        **VALID_VERDICT,
+        "alternative": None,
+    }
 
     walmart_fetch_url = "https://www.walmart.com/ip/great-widget"
     amazon_fetch_url = "https://www.amazon.com/great-widget/dp/B000000001"
     mock_create.side_effect = [
         make_response(make_tool_block("fetch_page", {"url": walmart_fetch_url}, "b1")),
         make_response(make_tool_block("fetch_page", {"url": amazon_fetch_url}, "b2")),
-        make_response(make_tool_block("submit_verdict", amazon_verdict, "b3")),
+        make_response(make_tool_block("submit_verdict", verdict_without_alternative, "b3")),
         make_response(make_tool_block("submit_verdict", amazon_verdict, "b4")),
     ]
 
@@ -810,11 +816,15 @@ async def test_candidate_eligible_when_size_in_content_not_title(
             "is_better_reviewed": False,
         },
     }
+    verdict_without_alternative = {
+        **VALID_VERDICT,
+        "alternative": None,
+    }
 
     amazon_fetch_url = "https://www.amazon.com/great-widget/dp/B000000001"
     mock_create.side_effect = [
         make_response(make_tool_block("fetch_page", {"url": amazon_fetch_url}, "b1")),
-        make_response(make_tool_block("submit_verdict", amazon_verdict, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_without_alternative, "b2")),
         make_response(make_tool_block("submit_verdict", amazon_verdict, "b3")),
     ]
 
@@ -1556,11 +1566,10 @@ async def test_only_eligible_candidate_can_be_selected(mock_create, extraction):
         _make_alternative(walmart_url, "$13.59"), evidence_urls
     )
 
-    # First submit shows the offer table; second submit accepts.
+    # The valid lowest eligible alternative is accepted on its first submission.
     mock_create.side_effect = [
         make_response(make_tool_block("fetch_page", {"url": walmart_url}, "b1")),
         make_response(make_tool_block("submit_verdict", verdict_walmart, "b2")),
-        make_response(make_tool_block("submit_verdict", verdict_walmart, "b3")),
     ]
 
     with patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch:
@@ -1569,6 +1578,7 @@ async def test_only_eligible_candidate_can_be_selected(mock_create, extraction):
 
     assert result.alternative is not None
     assert "walmart" in str(result.alternative.source_url).lower()
+    assert mock_create.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -1737,6 +1747,36 @@ async def test_no_alternative_rejected_when_eligible_candidates_exist(mock_creat
     assert "Please include the lowest eligible comparable offer" in rejection_tool_result
     assert "www.amazon.com" in rejection_tool_result
     assert "$7.95" in rejection_tool_result
+
+
+async def test_verdict_rejection_reason_is_logged(mock_create, extraction, caplog):
+    amazon_url = "https://www.amazon.com/cleanser"
+    submitted_url = "https://example.com/product"
+    identity = ProductIdentity(value="Great Widget", source="product_name")
+    amazon_page = _make_fetched_page(amazon_url, "Great Widget", "$7.95")
+    evidence_urls = [amazon_url, submitted_url, submitted_url]
+    verdict_no_alt = _verdict_with_evidence_and_alternative(None, evidence_urls)
+    verdict_amazon = _verdict_with_evidence_and_alternative(
+        _make_alternative(amazon_url, "$7.95"), evidence_urls
+    )
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("fetch_page", {"url": amazon_url}, "b1")),
+        make_response(make_tool_block("submit_verdict", verdict_no_alt, "b2")),
+        make_response(make_tool_block("submit_verdict", verdict_amazon, "b3")),
+    ]
+
+    with (
+        patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch,
+        caplog.at_level(logging.WARNING, logger="app.agent"),
+    ):
+        mock_fetch.return_value = amazon_page
+        await run_research_agent(submitted_url, extraction, identity)
+
+    assert any(
+        "Please include the lowest eligible comparable offer" in record.message
+        for record in caplog.records
+    )
 
 
 async def test_alternative_url_rejected_when_wrong_source_url(mock_create, extraction):
