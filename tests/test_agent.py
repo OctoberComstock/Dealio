@@ -1941,6 +1941,12 @@ def test_system_prompt_defines_pricing_thresholds():
     assert "median" in SYSTEM_PROMPT
 
 
+def test_system_prompt_allows_low_confidence_verdict_with_two_comparables():
+    assert "exactly 2 usable comparable prices" in SYSTEM_PROMPT
+    assert "confidence must be low" in SYSTEM_PROMPT
+    assert "Fewer than 2 usable comparable prices" in SYSTEM_PROMPT
+
+
 def test_system_prompt_excludes_different_product_comparisons():
     assert "Do not compare" in SYSTEM_PROMPT
 

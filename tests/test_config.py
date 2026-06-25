@@ -1,6 +1,12 @@
 from app.config import Settings
 
 
+def test_agent_timeout_defaults_to_140_seconds(monkeypatch):
+    monkeypatch.delenv("AGENT_TIMEOUT_SECONDS", raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.agent_timeout_seconds == 140
+
+
 def test_runtime_limits_overridable_via_env(monkeypatch):
     monkeypatch.setenv("MAX_SEARCHES", "10")
     monkeypatch.setenv("REQUEST_TIMEOUT_SECONDS", "60")

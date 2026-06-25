@@ -177,6 +177,8 @@ async def test_analyze_page_loading_message_is_initially_hidden(authenticated_cl
     response = await authenticated_client.get("/analyze")
     assert 'id="loading-message"' in response.text
     assert "hidden" in response.text
+    assert "background" in response.text.lower()
+    assert "around 2 minutes" in response.text
 
 
 # --- Submit ---
@@ -396,7 +398,9 @@ async def test_loading_page_displays_supporting_copy(client):
         return_value=FAKE_RUN_DATA_RUNNING,
     ):
         response = await client.get(f"/research/{FAKE_RUN_ID}/loading")
-    assert "marketplace" in response.text.lower()
+    assert "background" in response.text.lower()
+    assert "around 2 minutes" in response.text
+    assert "check back in a couple of minutes" in response.text
 
 
 async def test_loading_page_renders_error_for_failed_run(client):
