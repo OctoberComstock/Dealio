@@ -114,22 +114,16 @@ _IDENTITY_STOP_WORDS = frozenset(
 _ACCESSORY_TITLE_RE = re.compile(
     r"\b(?:"
     r"accessor(?:y|ies)"
-    r"|replacement(?:\s+part)?"
-    r"|spare\s+part"
-    r"|brush\s+roll"
-    r"|filter(?:\s+kit)?"
-    r"|charger"
-    r"|charging\s+dock"
-    r"|attachment(?:\s+only)?"
-    r"|battery\s+only"
-    r"|motor\s+assembly"
+    r"|(?:replacement|spare)\s+(?:part|component)s?"
+    r"|(?:replacement|spare)\s+[a-z0-9][a-z0-9\s/&+\-]{0,60}\s+for"
+    r"|attachment\s+only"
     r")\b",
     re.IGNORECASE,
 )
 _PARTIAL_LISTING_RE = re.compile(
     r"\b(?:"
     r"does\s+not\s+include\s+(?:the\s+)?(?:main\s+)?(?:unit|product)"
-    r"|main\s+unit\s+not\s+included"
+    r"|main\s+(?:unit|product)\s+not\s+included"
     r"|for\s+parts(?:\s+only)?"
     r"|parts\s+only"
     r")\b",

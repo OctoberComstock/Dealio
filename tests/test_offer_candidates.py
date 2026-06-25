@@ -465,14 +465,41 @@ def test_assess_product_identity_checks_products_without_recognized_size():
     assert match.matches is False
 
 
-def test_is_accessory_or_partial_listing_detects_replacement_part():
+def test_is_accessory_or_partial_listing_detects_replacement_component():
     candidate = OfferCandidate(
         merchant="www.ebay.com",
         source_url="https://www.ebay.com/itm/123",
-        product_name="Replacement Brush Roll for Bissell PowerClean FurGuard 4039",
+        product_name="Replacement keyboard for AcmeBook Pro 14",
         price_text="$19.99",
         price_amount=19.99,
         source_type="search_result",
+    )
+
+    assert is_accessory_or_partial_listing(candidate) is True
+
+
+def test_is_accessory_or_partial_listing_detects_explicit_accessory():
+    candidate = OfferCandidate(
+        merchant="www.example.com",
+        source_url="https://www.example.com/camera-case",
+        product_name="Protective case accessory for Snapshot X2 camera",
+        price_text="$24.99",
+        price_amount=24.99,
+        source_type="search_result",
+    )
+
+    assert is_accessory_or_partial_listing(candidate) is True
+
+
+def test_is_accessory_or_partial_listing_detects_missing_main_product():
+    candidate = OfferCandidate(
+        merchant="www.example.com",
+        source_url="https://www.example.com/game-controller",
+        product_name="Wireless game controller",
+        price_text="$39.99",
+        price_amount=39.99,
+        source_type="search_result",
+        match_text="Main product not included.",
     )
 
     assert is_accessory_or_partial_listing(candidate) is True
@@ -482,11 +509,39 @@ def test_is_accessory_or_partial_listing_allows_complete_product():
     candidate = OfferCandidate(
         merchant="www.ebay.com",
         source_url="https://www.ebay.com/itm/456",
-        product_name="Bissell PowerClean FurGuard 4039 Cordless Vacuum",
+        product_name="AcmeBook Pro 14 laptop",
         price_text="$159.99",
         price_amount=159.99,
         source_type="search_result",
-        match_text="Complete vacuum with battery and attachments included.",
+        match_text="Complete laptop with power adapter included.",
+    )
+
+    assert is_accessory_or_partial_listing(candidate) is False
+
+
+def test_is_accessory_or_partial_listing_allows_complete_product_with_component_name():
+    candidate = OfferCandidate(
+        merchant="www.example.com",
+        source_url="https://www.example.com/air-filter",
+        product_name="PureAir 500 room air filter",
+        price_text="$129.99",
+        price_amount=129.99,
+        source_type="search_result",
+        match_text="Complete air-cleaning unit.",
+    )
+
+    assert is_accessory_or_partial_listing(candidate) is False
+
+
+def test_is_accessory_or_partial_listing_allows_complete_replacement_product():
+    candidate = OfferCandidate(
+        merchant="www.example.com",
+        source_url="https://www.example.com/replacement-laptop",
+        product_name="Replacement AcmeBook Pro 14 laptop",
+        price_text="$899.99",
+        price_amount=899.99,
+        source_type="search_result",
+        match_text="Complete laptop replacing a damaged unit.",
     )
 
     assert is_accessory_or_partial_listing(candidate) is False
