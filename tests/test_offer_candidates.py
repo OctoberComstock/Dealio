@@ -1,10 +1,13 @@
 from app.tools.fetch_page import FetchedPage
 from app.tools.offer_candidates import (
     OfferCandidate,
+    assess_product_identity,
     candidate_from_page,
     candidate_from_search_result,
     extract_offer_price_text,
     format_offer_table,
+    is_accessory_or_partial_listing,
+    is_installment_price,
     is_purchasable_offer_candidate,
     is_same_size,
     is_unavailable,
@@ -424,6 +427,138 @@ def test_candidate_from_search_result_returns_none_without_parseable_price():
     )
 
     assert candidate_from_search_result(result) is None
+
+
+# --- candidate identity and listing type ---
+
+
+def test_assess_product_identity_accepts_same_product_with_model_identity():
+    match = assess_product_identity(
+        "Bissell PowerClean FurGuard 280W Cordless Vacuum 4039",
+        "BISSELL PowerClean FurGuard Cordless Vacuum, Model 4039",
+        "280W self-standing vacuum for pet hair.",
+    )
+
+    assert match.matches is True
+    assert match.is_strong is True
+    assert "4039" in match.reason
+
+
+def test_assess_product_identity_rejects_unrelated_cheap_product():
+    match = assess_product_identity(
+        "Bissell PowerClean FurGuard 280W Cordless Vacuum 4039",
+        "Generic Handheld Car Vacuum",
+        "Compact rechargeable cleaner for $19.99.",
+    )
+
+    assert match.matches is False
+    assert match.is_strong is False
+
+
+def test_assess_product_identity_checks_products_without_recognized_size():
+    match = assess_product_identity(
+        "Bissell PowerClean FurGuard Cordless Vacuum",
+        "Shark Navigator Lift-Away Upright Vacuum",
+        "Full-size vacuum cleaner.",
+    )
+
+    assert match.matches is False
+
+
+def test_is_accessory_or_partial_listing_detects_replacement_component():
+    candidate = OfferCandidate(
+        merchant="www.ebay.com",
+        source_url="https://www.ebay.com/itm/123",
+        product_name="Replacement keyboard for AcmeBook Pro 14",
+        price_text="$19.99",
+        price_amount=19.99,
+        source_type="search_result",
+    )
+
+    assert is_accessory_or_partial_listing(candidate) is True
+
+
+def test_is_accessory_or_partial_listing_detects_explicit_accessory():
+    candidate = OfferCandidate(
+        merchant="www.example.com",
+        source_url="https://www.example.com/camera-case",
+        product_name="Protective case accessory for Snapshot X2 camera",
+        price_text="$24.99",
+        price_amount=24.99,
+        source_type="search_result",
+    )
+
+    assert is_accessory_or_partial_listing(candidate) is True
+
+
+def test_is_accessory_or_partial_listing_detects_missing_main_product():
+    candidate = OfferCandidate(
+        merchant="www.example.com",
+        source_url="https://www.example.com/game-controller",
+        product_name="Wireless game controller",
+        price_text="$39.99",
+        price_amount=39.99,
+        source_type="search_result",
+        match_text="Main product not included.",
+    )
+
+    assert is_accessory_or_partial_listing(candidate) is True
+
+
+def test_is_accessory_or_partial_listing_allows_complete_product():
+    candidate = OfferCandidate(
+        merchant="www.ebay.com",
+        source_url="https://www.ebay.com/itm/456",
+        product_name="AcmeBook Pro 14 laptop",
+        price_text="$159.99",
+        price_amount=159.99,
+        source_type="search_result",
+        match_text="Complete laptop with power adapter included.",
+    )
+
+    assert is_accessory_or_partial_listing(candidate) is False
+
+
+def test_is_accessory_or_partial_listing_allows_complete_product_with_component_name():
+    candidate = OfferCandidate(
+        merchant="www.example.com",
+        source_url="https://www.example.com/air-filter",
+        product_name="PureAir 500 room air filter",
+        price_text="$129.99",
+        price_amount=129.99,
+        source_type="search_result",
+        match_text="Complete air-cleaning unit.",
+    )
+
+    assert is_accessory_or_partial_listing(candidate) is False
+
+
+def test_is_accessory_or_partial_listing_allows_complete_replacement_product():
+    candidate = OfferCandidate(
+        merchant="www.example.com",
+        source_url="https://www.example.com/replacement-laptop",
+        product_name="Replacement AcmeBook Pro 14 laptop",
+        price_text="$899.99",
+        price_amount=899.99,
+        source_type="search_result",
+        match_text="Complete laptop replacing a damaged unit.",
+    )
+
+    assert is_accessory_or_partial_listing(candidate) is False
+
+
+def test_is_installment_price_detects_monthly_payment():
+    candidate = OfferCandidate(
+        merchant="www.example.com",
+        source_url="https://www.example.com/vacuum",
+        product_name="Bissell PowerClean FurGuard 4039",
+        price_text="$19.99",
+        price_amount=19.99,
+        source_type="search_result",
+        match_text="$19.99 per month for 8 months with financing.",
+    )
+
+    assert is_installment_price(candidate) is True
 
 
 # --- format_offer_table ---
