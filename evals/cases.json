@@ -48,12 +48,23 @@
   },
   {
     "id": "insufficient_data",
-    "description": "Fewer than 3 usable comparable prices are available. Expect insufficient_data with low confidence.",
+    "description": "No usable comparable prices are available. Expect insufficient_data with low confidence.",
     "input_url": "https://www.nicheshop.com/products/artisan-facial-mist-50ml",
     "expected": {
       "verdict_any_of": ["insufficient_data"],
       "confidence_any_of": ["low"],
       "must_not_have_alternative": true
+    }
+  },
+  {
+    "id": "two_comparables_low_confidence",
+    "description": "Two strong comparable prices agree that the submitted listing is at market rate. Expect a low-confidence fair verdict instead of insufficient_data.",
+    "input_url": "https://www.skincare-shop.com/products/cloud-cleanser-150ml",
+    "expected": {
+      "verdict_any_of": ["fair"],
+      "confidence_any_of": ["low"],
+      "min_evidence_count": 3,
+      "all_evidence_urls_observed": true
     }
   },
   {

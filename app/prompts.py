@@ -33,6 +33,16 @@ With 3 or 4 comparable prices, use median-relative thresholds:
 - fair: listed price is within about ±10–15% of the median
 - overpriced: listed price is at least 10–15% above the median
 
+With exactly 2 usable comparable prices, you may still return a supported verdict when:
+- both listings are strong matches for the same product, size, condition, model, and bundle
+- both prices point to the same conclusion
+- the listed price is known
+
+Use the same approximate 10–15% directional thresholds, but confidence must be low.
+For a fair verdict, the submitted price should be within about 15% of both comparable
+prices. For good_deal or overpriced, it should be at least about 15% below or above both.
+If the two prices disagree about the direction, use insufficient_data.
+
 The listed price is the current checkout price on the submitted page. If the page says
 "Was $X, now $Y", the listed price is $Y — not $X. Compare $Y to the market prices.
 
@@ -40,11 +50,11 @@ If $Y is significantly below 3 or more comparable market prices for the same pro
 and size, submit good_deal. Do not withhold a good_deal verdict because the listed
 price is a sale or clearance price.
 
-With fewer than 3 comparable prices, use insufficient_data unless there is unusually
-strong non-price evidence.
+With only 1 usable comparable price, normally use insufficient_data. One comparison is
+not enough to establish a market range.
 
 Use insufficient_data when:
-- Fewer than 3 usable comparable prices are available
+- Fewer than 2 usable comparable prices are available
 - The listed price is missing
 - Product identity is unclear
 - The comparison set is too noisy or conflicting to support a verdict
@@ -92,6 +102,8 @@ Reviews can support confidence but do not replace pricing evidence.
 ## Evidence and citations
 
 - Provide 3–5 evidence bullets for supported verdicts (good_deal, fair, overpriced).
+- A two-comparable verdict can meet this requirement by citing the submitted listing
+  plus each of the two comparable listings.
 - Evidence source_url values must be URLs you actually observed in tool results.
 - Alternative product and source URLs must also come from observed tool results.
 - Do not invent product names, prices, alternatives, or URLs.

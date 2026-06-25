@@ -1,0 +1,45 @@
+{
+  "extraction": {
+    "product_name": "CloudClean Gentle Cloud Cleanser 150ml",
+    "listed_price": "$24.00",
+    "merchant": "skincare-shop.com"
+  },
+  "identity": {
+    "value": "CloudClean Gentle Cloud Cleanser 150ml",
+    "source": "product_name"
+  },
+  "submitted_page": {
+    "url": "https://www.skincare-shop.com/products/cloud-cleanser-150ml",
+    "title": "CloudClean Gentle Cloud Cleanser 150ml",
+    "content": "CloudClean Gentle Cloud Cleanser 150ml. Current price: $24.00. In stock.",
+    "price_guess": "$24.00"
+  },
+  "search_results": [
+    {
+      "title": "CloudClean Gentle Cloud Cleanser 150ml - Beauty Market",
+      "url": "https://www.beautymarket.com/cloudclean-gentle-cloud-cleanser-150ml",
+      "snippet": "CloudClean Gentle Cloud Cleanser 150ml. $23.00. In stock.",
+      "score": 0.94
+    },
+    {
+      "title": "CloudClean Gentle Cloud Cleanser 150ml - Skin Store",
+      "url": "https://www.skinstore.example/cloudclean-gentle-cloud-cleanser-150ml",
+      "snippet": "CloudClean Gentle Cloud Cleanser 150ml. $25.00. In stock.",
+      "score": 0.91
+    }
+  ],
+  "fetched_pages": {
+    "https://www.beautymarket.com/cloudclean-gentle-cloud-cleanser-150ml": {
+      "url": "https://www.beautymarket.com/cloudclean-gentle-cloud-cleanser-150ml",
+      "title": "CloudClean Gentle Cloud Cleanser 150ml",
+      "content": "CloudClean Gentle Cloud Cleanser 150ml. Price: $23.00. In stock and available to add to cart.",
+      "price_guess": "$23.00"
+    },
+    "https://www.skinstore.example/cloudclean-gentle-cloud-cleanser-150ml": {
+      "url": "https://www.skinstore.example/cloudclean-gentle-cloud-cleanser-150ml",
+      "title": "CloudClean Gentle Cloud Cleanser 150ml",
+      "content": "CloudClean Gentle Cloud Cleanser 150ml. Price: $25.00. In stock and available to add to cart.",
+      "price_guess": "$25.00"
+    }
+  }
+}
