@@ -150,6 +150,7 @@ Fill in local values using placeholders like these:
 ```text
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ANTHROPIC_MODEL=claude-sonnet-4-6
+AGENT_TIMEOUT_SECONDS=140
 TAVILY_API_KEY=your_tavily_api_key_here
 DEALIO_DEMO_PASSWORD=choose_a_demo_password
 SESSION_SECRET_KEY=generate_a_random_secret
@@ -207,6 +208,7 @@ environment variables, using placeholders like:
 
 ```text
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
+AGENT_TIMEOUT_SECONDS=140
 TAVILY_API_KEY=your_tavily_api_key_here
 DEALIO_DEMO_PASSWORD=choose_a_demo_password
 SESSION_SECRET_KEY=generate_a_random_secret
