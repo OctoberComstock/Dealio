@@ -267,7 +267,10 @@ async def _execute_tool(
         budget.fetches_remaining -= 1
         logger.info("fetch_page: url=%r fetches_remaining=%d", url, budget.fetches_remaining)
         try:
-            page = await fetch_page(url)
+            page = await fetch_page(
+                url,
+                request_timeout_seconds=settings.supporting_page_timeout_seconds,
+            )
             _observe_url(page.url, seen_urls)
             _add_offer_candidate(candidates, candidate_from_page(page))
             return _format_fetched_page(page)

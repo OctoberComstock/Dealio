@@ -31,6 +31,7 @@ async def test_extract_product_returns_extraction_result(mock_fetch_page):
     mock_fetch_page.return_value = make_fetched_page()
     result = await extract_product("https://example.com/product")
     assert isinstance(result, ProductExtractionResult)
+    mock_fetch_page.assert_awaited_once_with("https://example.com/product")
 
 
 async def test_extract_product_extraction_field_is_product_page_extraction(mock_fetch_page):

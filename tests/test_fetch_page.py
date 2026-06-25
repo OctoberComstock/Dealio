@@ -322,6 +322,29 @@ async def test_fetch_page_returns_fetched_page(mock_http_client, mock_no_shopify
     assert isinstance(result, FetchedPage)
 
 
+async def test_fetch_page_uses_default_request_timeout(mock_no_shopify, mock_no_render):
+    mock_client = AsyncMock()
+    mock_client.get.return_value = make_mock_response(SAMPLE_HTML)
+    with patch("app.tools.fetch_page.httpx.AsyncClient") as mock_cls:
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        await fetch_page("https://example.com/product")
+    assert mock_cls.call_args.kwargs["timeout"] == 60
+
+
+async def test_fetch_page_accepts_explicit_request_timeout(mock_no_shopify, mock_no_render):
+    mock_client = AsyncMock()
+    mock_client.get.return_value = make_mock_response(SAMPLE_HTML)
+    with patch("app.tools.fetch_page.httpx.AsyncClient") as mock_cls:
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        await fetch_page(
+            "https://example.com/product",
+            request_timeout_seconds=15,
+        )
+    assert mock_cls.call_args.kwargs["timeout"] == 15
+
+
 async def test_fetch_page_extracts_title(mock_http_client, mock_no_shopify, mock_no_render):
     mock_http_client.get.return_value = make_mock_response(SAMPLE_HTML)
     result = await fetch_page("https://example.com/product")
@@ -364,6 +387,20 @@ async def test_fetch_page_network_error_raises(mock_http_client):
     )
     with pytest.raises(ValueError, match="Network error"):
         await fetch_page("https://example.com/product")
+
+
+async def test_static_request_timeout_does_not_launch_rendered_fallback(mock_http_client):
+    mock_http_client.get.side_effect = httpx.ReadTimeout(
+        "Request timed out",
+        request=httpx.Request("GET", "https://example.com/product"),
+    )
+    with patch("app.tools.fetch_page._render_page", new_callable=AsyncMock) as mock_render:
+        with pytest.raises(ValueError, match="Network error"):
+            await fetch_page(
+                "https://example.com/product",
+                request_timeout_seconds=15,
+            )
+    mock_render.assert_not_awaited()
 
 
 async def test_fetch_page_non_html_content_type_raises(mock_http_client):

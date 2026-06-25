@@ -152,6 +152,7 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ANTHROPIC_MODEL=claude-sonnet-4-6
 AGENT_TIMEOUT_SECONDS=140
 TAVILY_API_KEY=your_tavily_api_key_here
+SUPPORTING_PAGE_TIMEOUT_SECONDS=15
 DEALIO_DEMO_PASSWORD=choose_a_demo_password
 SESSION_SECRET_KEY=generate_a_random_secret
 DATABASE_PATH=./dealio.db
@@ -210,6 +211,7 @@ environment variables, using placeholders like:
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 AGENT_TIMEOUT_SECONDS=140
 TAVILY_API_KEY=your_tavily_api_key_here
+SUPPORTING_PAGE_TIMEOUT_SECONDS=15
 DEALIO_DEMO_PASSWORD=choose_a_demo_password
 SESSION_SECRET_KEY=generate_a_random_secret
 DATABASE_PATH=/data/dealio.db

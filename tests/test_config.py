@@ -10,9 +10,11 @@ def test_agent_timeout_defaults_to_140_seconds(monkeypatch):
 def test_runtime_limits_overridable_via_env(monkeypatch):
     monkeypatch.setenv("MAX_SEARCHES", "10")
     monkeypatch.setenv("REQUEST_TIMEOUT_SECONDS", "60")
+    monkeypatch.setenv("SUPPORTING_PAGE_TIMEOUT_SECONDS", "12")
     settings = Settings()
     assert settings.max_searches == 10
     assert settings.request_timeout_seconds == 60
+    assert settings.supporting_page_timeout_seconds == 12
 
 
 def test_tavily_config_overridable_via_env(monkeypatch):
