@@ -6,11 +6,12 @@ import anthropic
 import httpx
 import pytest
 
-from app.agent import run_research_agent
+from app.agent import _build_eligible_candidates, run_research_agent
 from app.prompts import SYSTEM_PROMPT
 from app.schemas import ResearchResult
 from app.tools.extract_product import ProductPageExtraction
 from app.tools.fetch_page import FetchedPage
+from app.tools.offer_candidates import OfferCandidate
 from app.tools.product_identity import ProductIdentity
 from app.tools.search_web import SearchResult
 
@@ -430,7 +431,7 @@ async def test_fetch_page_cache_hit_observes_both_requested_and_cached_url(
     assert result.verdict.value == "good_deal"
     assert any(str(e.source_url) == requested_url for e in result.evidence)
 
-async def test_search_web_priced_result_can_drive_offer_table(
+async def test_verified_page_takes_precedence_over_priced_search_result(
     mock_create, extraction, identity
 ):
     amazon_result = SearchResult(
@@ -456,17 +457,6 @@ async def test_search_web_priced_result_can_drive_offer_table(
             "is_better_reviewed": False,
         },
     }
-    amazon_verdict = {
-        **VALID_VERDICT,
-        "alternative": {
-            "product_name": "Great Widget on Amazon",
-            "price": "$7.95",
-            "reason": "Lowest eligible comparable offer.",
-            "source_url": "https://www.amazon.com/great-widget/dp/B000000001",
-            "is_cheaper": True,
-            "is_better_reviewed": False,
-        },
-    }
     mock_create.side_effect = [
         make_response(make_tool_block("search_web", {"query": "Great Widget Amazon"}, "b1")),
         make_response(
@@ -477,7 +467,6 @@ async def test_search_web_priced_result_can_drive_offer_table(
             )
         ),
         make_response(make_tool_block("submit_verdict", stylevana_verdict, "b3")),
-        make_response(make_tool_block("submit_verdict", amazon_verdict, "b4")),
     ]
 
     with (
@@ -494,15 +483,8 @@ async def test_search_web_priced_result_can_drive_offer_table(
         )
 
     assert result.alternative is not None
-    assert result.alternative.price == "$7.95"
-
-    messages = mock_create.call_args_list[3].kwargs["messages"]
-    rejection_tool_result = messages[-2]["content"][0]["content"]
-    assert "Comparable offers found" in rejection_tool_result
-    assert "www.amazon.com" in rejection_tool_result
-    assert "$7.95" in rejection_tool_result
-    assert "www.stylevana.com" in rejection_tool_result
-    assert "$11.90" in rejection_tool_result
+    assert result.alternative.price == "$11.90"
+    assert mock_create.call_count == 3
 
 
 async def test_search_web_result_without_price_does_not_become_offer_candidate(
@@ -600,6 +582,143 @@ async def test_price_range_search_result_is_not_eligible_as_alternative(
 
     assert result.verdict.value == "good_deal"
     assert result.alternative is None
+
+
+def test_verified_candidate_takes_precedence_over_cheaper_search_only_candidate():
+    search_candidate = OfferCandidate(
+        merchant="www.ebay.com",
+        source_url="https://www.ebay.com/itm/cheap",
+        product_name="Bissell PowerClean FurGuard 4039 Cordless Vacuum",
+        price_text="$149.99",
+        price_amount=149.99,
+        source_type="search_result",
+        verification_status="unverified",
+        match_text="Bissell model 4039, 280W cordless vacuum.",
+    )
+    verified_candidate = OfferCandidate(
+        merchant="www.walmart.com",
+        source_url="https://www.walmart.com/ip/bissell-4039",
+        product_name="Bissell PowerClean FurGuard 4039 Cordless Vacuum",
+        price_text="$159.99",
+        price_amount=159.99,
+        source_type="fetched_page",
+        verification_status="verified",
+        match_text="Bissell model 4039. In stock.",
+    )
+    seen_urls = {search_candidate.source_url, verified_candidate.source_url}
+
+    eligible = _build_eligible_candidates(
+        [search_candidate, verified_candidate],
+        submitted_price=179.99,
+        identity_value="Bissell PowerClean FurGuard 280W Cordless Vacuum 4039",
+        seen_urls=seen_urls,
+    )
+
+    assert eligible == [verified_candidate]
+
+
+def test_fetch_failed_search_candidate_with_strong_identity_remains_eligible():
+    search_candidate = OfferCandidate(
+        merchant="www.ebay.com",
+        source_url="https://www.ebay.com/itm/bissell-4039",
+        product_name="Bissell PowerClean FurGuard 4039 Cordless Vacuum",
+        price_text="$159.99",
+        price_amount=159.99,
+        source_type="search_result",
+        verification_status="fetch_failed",
+        match_text="Bissell 280W cordless vacuum. Complete product.",
+    )
+
+    eligible = _build_eligible_candidates(
+        [search_candidate],
+        submitted_price=179.99,
+        identity_value="Bissell PowerClean FurGuard 280W Cordless Vacuum 4039",
+        seen_urls={search_candidate.source_url},
+    )
+
+    assert eligible == [search_candidate]
+
+
+async def test_failed_fetch_does_not_make_weak_search_candidate_mandatory(
+    mock_create, extraction
+):
+    bissell_identity = ProductIdentity(
+        value="Bissell PowerClean FurGuard 280W Cordless Vacuum 4039",
+        source="product_name",
+    )
+    weak_ebay_result = SearchResult(
+        title="Vacuum Cleaner Deal - $19.99",
+        url="https://www.ebay.com/itm/weak-result",
+        snippet="Low price vacuum listing.",
+        metadata={"source": "tavily", "score": 0.8},
+    )
+    supported_result = SearchResult(
+        title="Bissell PowerClean FurGuard 4039 Cordless Vacuum",
+        url="https://www.walmart.com/ip/bissell-4039",
+        snippet="Bissell 280W cordless vacuum for $159.99.",
+        metadata={"source": "tavily", "score": 0.9},
+    )
+    supported_page = FetchedPage(
+        url=str(supported_result.url),
+        title=supported_result.title,
+        content="Bissell PowerClean FurGuard model 4039. In stock.",
+        price_guess="$159.99",
+    )
+    verdict_without_alternative = {
+        **VALID_VERDICT,
+        "listed_price": "$179.99",
+        "alternative": None,
+    }
+    supported_verdict = {
+        **verdict_without_alternative,
+        "alternative": {
+            "product_name": supported_result.title,
+            "price": "$159.99",
+            "reason": "Lowest verified comparable offer.",
+            "source_url": str(supported_result.url),
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+
+    mock_create.side_effect = [
+        make_response(make_tool_block("search_web", {"query": "Bissell 4039 price"}, "b1")),
+        make_response(
+            make_tool_block("fetch_page", {"url": str(weak_ebay_result.url)}, "b2")
+        ),
+        make_response(
+            make_tool_block("fetch_page", {"url": str(supported_result.url)}, "b3")
+        ),
+        make_response(make_tool_block("submit_verdict", verdict_without_alternative, "b4")),
+        make_response(make_tool_block("submit_verdict", supported_verdict, "b5")),
+    ]
+
+    async def fake_fetch(url: str, **_kwargs) -> FetchedPage:
+        if "ebay.com" in url:
+            raise ValueError("HTTP 403")
+        return supported_page
+
+    with (
+        patch("app.agent.search_web", new_callable=AsyncMock) as mock_search,
+        patch("app.agent.fetch_page", new_callable=AsyncMock) as mock_fetch,
+    ):
+        mock_search.return_value = [weak_ebay_result, supported_result]
+        mock_fetch.side_effect = fake_fetch
+        result = await run_research_agent(
+            "https://example.com/product",
+            ProductPageExtraction(
+                product_name=bissell_identity.value,
+                listed_price="$179.99",
+                merchant="example.com",
+            ),
+            bissell_identity,
+        )
+
+    assert result.alternative is not None
+    assert result.alternative.price == "$159.99"
+    rejection = tool_result_contents(mock_create)[-2]
+    assert "$19.99" not in rejection
+    assert "$159.99" in rejection
 
 
 async def test_fetch_page_cache_hit_skips_network_and_comparable_candidates_are_found(

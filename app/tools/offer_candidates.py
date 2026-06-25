@@ -84,6 +84,70 @@ _PURCHASABLE_SIGNAL_RE = re.compile(
     re.IGNORECASE,
 )
 
+_IDENTITY_TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
+_MODEL_TOKEN_RE = re.compile(r"^(?=.*\d)[a-z0-9]{2,}$", re.IGNORECASE)
+_SIZE_TOKEN_RE = re.compile(
+    r"^\d+(?:\.\d+)?(?:ml|g|floz|oz|lb|kg|ct|count|pack)$",
+    re.IGNORECASE,
+)
+_IDENTITY_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "at",
+        "buy",
+        "for",
+        "from",
+        "in",
+        "new",
+        "of",
+        "on",
+        "online",
+        "sale",
+        "shop",
+        "the",
+        "with",
+    }
+)
+
+_ACCESSORY_TITLE_RE = re.compile(
+    r"\b(?:"
+    r"accessor(?:y|ies)"
+    r"|replacement(?:\s+part)?"
+    r"|spare\s+part"
+    r"|brush\s+roll"
+    r"|filter(?:\s+kit)?"
+    r"|charger"
+    r"|charging\s+dock"
+    r"|attachment(?:\s+only)?"
+    r"|battery\s+only"
+    r"|motor\s+assembly"
+    r")\b",
+    re.IGNORECASE,
+)
+_PARTIAL_LISTING_RE = re.compile(
+    r"\b(?:"
+    r"does\s+not\s+include\s+(?:the\s+)?(?:main\s+)?(?:unit|product)"
+    r"|main\s+unit\s+not\s+included"
+    r"|for\s+parts(?:\s+only)?"
+    r"|parts\s+only"
+    r")\b",
+    re.IGNORECASE,
+)
+_INSTALLMENT_RE = re.compile(
+    r"(?:"
+    r"\b(?:per|a|each)\s+month\b"
+    r"|\bmonthly\s+(?:payment|payments|price)\b"
+    r"|\b\d+\s+(?:easy\s+)?payments?\s+of\b"
+    r"|\bpay\s+in\s+\d+\b"
+    r"|\binstallments?\b"
+    r"|\bfinancing\b"
+    r"|/(?:mo|month)\b"
+    r")",
+    re.IGNORECASE,
+)
+
 
 @dataclass
 class OfferCandidate:
@@ -94,6 +158,14 @@ class OfferCandidate:
     price_amount: float | None
     source_type: str = "fetched_page"
     match_text: str = field(default="")
+    verification_status: str = "verified"
+
+
+@dataclass(frozen=True)
+class ProductIdentityMatch:
+    matches: bool
+    is_strong: bool
+    reason: str
 
 
 def parse_price_amount(price_text: str | None) -> float | None:
@@ -188,6 +260,91 @@ def is_unavailable(candidate: OfferCandidate) -> bool:
     return bool(_UNAVAILABLE_RE.search(combined_text))
 
 
+def _identity_tokens(text: str) -> list[str]:
+    tokens = []
+    for token in _IDENTITY_TOKEN_RE.findall(text.lower()):
+        if token in _IDENTITY_STOP_WORDS:
+            continue
+        if _SIZE_TOKEN_RE.match(token):
+            continue
+        tokens.append(token)
+    return tokens
+
+
+def _model_tokens(tokens: list[str]) -> set[str]:
+    return {token for token in tokens if _MODEL_TOKEN_RE.match(token)}
+
+
+def assess_product_identity(
+    submitted_name: str,
+    candidate_name: str | None,
+    match_text: str = "",
+) -> ProductIdentityMatch:
+    """Compare deterministic product identity signals in names and offer text."""
+    submitted_tokens = _identity_tokens(submitted_name)
+    candidate_tokens = _identity_tokens(f"{candidate_name or ''} {match_text}")
+    if not submitted_tokens or not candidate_tokens:
+        return ProductIdentityMatch(False, False, "missing identity tokens")
+
+    submitted_model_tokens = _model_tokens(submitted_tokens)
+    candidate_model_tokens = _model_tokens(candidate_tokens)
+    shared_model_tokens = submitted_model_tokens & candidate_model_tokens
+
+    submitted_words = set(submitted_tokens) - submitted_model_tokens
+    candidate_words = set(candidate_tokens) - candidate_model_tokens
+    shared_words = submitted_words & candidate_words
+
+    brand_token = next(
+        (token for token in submitted_tokens if token not in submitted_model_tokens),
+        None,
+    )
+    brand_matches = brand_token is None or brand_token in candidate_words
+    word_overlap = len(shared_words) / len(submitted_words) if submitted_words else 0.0
+
+    if shared_model_tokens and brand_matches:
+        model_summary = ", ".join(sorted(shared_model_tokens))
+        return ProductIdentityMatch(
+            True,
+            True,
+            f"shared brand and model token(s): {model_summary}",
+        )
+
+    has_meaningful_word_overlap = (
+        brand_matches and len(shared_words) >= 2 and word_overlap >= 0.5
+    )
+    if not has_meaningful_word_overlap:
+        return ProductIdentityMatch(
+            False,
+            False,
+            f"insufficient identity overlap ({len(shared_words)} shared words)",
+        )
+
+    all_short_identity_words_match = (
+        len(submitted_words) <= 2 and submitted_words <= candidate_words
+    )
+    is_strong = all_short_identity_words_match or (
+        len(shared_words) >= 3 and word_overlap >= 0.6
+    )
+    return ProductIdentityMatch(
+        True,
+        is_strong,
+        f"shared {len(shared_words)} product words ({word_overlap:.0%} overlap)",
+    )
+
+
+def is_accessory_or_partial_listing(candidate: OfferCandidate) -> bool:
+    """Return True for parts, accessories, or listings without the main product."""
+    title = candidate.product_name or ""
+    combined = f"{title} {candidate.match_text}"
+    return bool(_ACCESSORY_TITLE_RE.search(title) or _PARTIAL_LISTING_RE.search(combined))
+
+
+def is_installment_price(candidate: OfferCandidate) -> bool:
+    """Return True when the extracted amount is a payment rather than a full price."""
+    combined = f"{candidate.product_name or ''} {candidate.match_text}"
+    return bool(_INSTALLMENT_RE.search(combined))
+
+
 def is_purchasable_offer_candidate(candidate: OfferCandidate) -> bool:
     """Return True when the candidate represents a concrete purchasable listing.
 
@@ -220,6 +377,7 @@ def candidate_from_page(page: FetchedPage) -> OfferCandidate:
         price_amount=parse_price_amount(page.price_guess),
         source_type="fetched_page",
         match_text=(page.content or "")[:_MATCH_TEXT_MAX_CHARS],
+        verification_status="verified",
     )
 
 def candidate_from_search_result(result) -> OfferCandidate | None:
@@ -242,6 +400,7 @@ def candidate_from_search_result(result) -> OfferCandidate | None:
         price_amount=parse_price_amount(price_text),
         source_type="search_result",
         match_text=result.snippet or "",
+        verification_status="unverified",
     )
 
 def format_offer_table(candidates: list[OfferCandidate]) -> str:

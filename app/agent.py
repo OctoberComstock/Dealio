@@ -15,9 +15,12 @@ from app.tools.fetch_page import FetchedPage, fetch_page
 from app.tools.normalize_url import fetch_page_cache_key, normalize_url
 from app.tools.offer_candidates import (
     OfferCandidate,
+    assess_product_identity,
     candidate_from_page,
     candidate_from_search_result,
     format_offer_table,
+    is_accessory_or_partial_listing,
+    is_installment_price,
     is_purchasable_offer_candidate,
     is_same_size,
     is_unavailable,
@@ -71,6 +74,17 @@ def _add_offer_candidate(
     candidates.append(candidate)
 
 
+def _mark_search_candidate_fetch_failed(
+    candidates: list[OfferCandidate],
+    url: str,
+) -> None:
+    for candidate in candidates:
+        if candidate.source_type != "search_result":
+            continue
+        if _urls_are_equivalent(candidate.source_url, url):
+            candidate.verification_status = "fetch_failed"
+
+
 def _url_was_observed(url: str, seen_urls: set[str]) -> bool:
     if url in seen_urls:
         return True
@@ -114,23 +128,84 @@ def _build_eligible_candidates(
     identity_value: str,
     seen_urls: set[str],
 ) -> list[OfferCandidate]:
-    eligible = []
+    verified_candidates = []
+    search_candidates = []
+
+    def exclude(candidate: OfferCandidate, reason: str, identity_reason: str = "") -> None:
+        logger.info(
+            "Offer candidate excluded: url=%s title=%r price=%s source_type=%s "
+            "verification=%s identity=%r reason=%s",
+            candidate.source_url,
+            candidate.product_name,
+            candidate.price_amount,
+            candidate.source_type,
+            candidate.verification_status,
+            identity_reason,
+            reason,
+        )
+
     for candidate in candidates:
         if candidate.price_amount is None:
+            exclude(candidate, "missing parseable price")
             continue
         if not _url_was_observed(candidate.source_url, seen_urls):
+            exclude(candidate, "URL was not observed")
             continue
         savings = (submitted_price - candidate.price_amount) / submitted_price
         if savings < settings.meaningful_savings_threshold:
+            exclude(candidate, "savings below threshold")
             continue
         if is_unavailable(candidate):
+            exclude(candidate, "listing unavailable")
             continue
         if not is_same_size(identity_value, candidate.product_name, candidate.match_text):
+            exclude(candidate, "size mismatch")
             continue
         if not is_purchasable_offer_candidate(candidate):
+            exclude(candidate, "not a concrete purchasable offer")
             continue
-        eligible.append(candidate)
-    eligible.sort(key=lambda c: c.price_amount)
+        if is_accessory_or_partial_listing(candidate):
+            exclude(candidate, "accessory, replacement part, or partial product")
+            continue
+        if is_installment_price(candidate):
+            exclude(candidate, "installment or payment amount")
+            continue
+
+        identity_match = assess_product_identity(
+            identity_value,
+            candidate.product_name,
+            candidate.match_text,
+        )
+        if not identity_match.matches:
+            exclude(candidate, "product identity mismatch", identity_match.reason)
+            continue
+        if candidate.source_type == "search_result" and not identity_match.is_strong:
+            exclude(candidate, "search result lacks strong identity", identity_match.reason)
+            continue
+
+        logger.info(
+            "Offer candidate eligible: url=%s title=%r price=%s source_type=%s "
+            "verification=%s identity=%r",
+            candidate.source_url,
+            candidate.product_name,
+            candidate.price_amount,
+            candidate.source_type,
+            candidate.verification_status,
+            identity_match.reason,
+        )
+        if candidate.verification_status == "verified":
+            verified_candidates.append(candidate)
+        else:
+            search_candidates.append(candidate)
+
+    if verified_candidates:
+        for candidate in search_candidates:
+            exclude(candidate, "verified candidate precedence")
+        eligible = verified_candidates
+    else:
+        eligible = search_candidates
+
+    eligible.sort(key=lambda candidate: candidate.price_amount)
     return eligible
 
 
@@ -275,6 +350,7 @@ async def _execute_tool(
             _add_offer_candidate(candidates, candidate_from_page(page))
             return _format_fetched_page(page)
         except ValueError as exc:
+            _mark_search_candidate_fetch_failed(candidates, url)
             logger.warning("fetch_page failed: url=%r error=%s", url, exc)
             return f"Fetch error: {exc}"
 
@@ -479,6 +555,27 @@ def _evaluate_verdict_submission(
                 "market-summary page, not a concrete purchasable listing. "
                 "Please omit the alternative or choose a specific purchasable product/listing page."
             )
+        if alt_candidate is not None and is_accessory_or_partial_listing(alt_candidate):
+            return reject(
+                "The submitted alternative appears to be an accessory, replacement part, "
+                "or partial product. Please omit it or choose the complete product."
+            )
+        if alt_candidate is not None and is_installment_price(alt_candidate):
+            return reject(
+                "The submitted alternative price appears to be an installment or payment "
+                "amount rather than the full product price."
+            )
+        if alt_candidate is not None:
+            identity_match = assess_product_identity(
+                identity_value,
+                alt_candidate.product_name,
+                alt_candidate.match_text,
+            )
+            if not identity_match.matches:
+                return reject(
+                    "The submitted alternative does not have sufficient product identity "
+                    "overlap with the submitted product."
+                )
         if (
             alt_candidate is not None
             and submitted_price is not None
