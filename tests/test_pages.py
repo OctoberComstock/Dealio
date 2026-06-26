@@ -7,7 +7,17 @@ from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
 from app.main import app
-from app.schemas import Confidence, EvidenceItem, ResearchResult, Verdict
+from app.schemas import (
+    AvailabilityStatus,
+    ComparableOffer,
+    Confidence,
+    EvidenceItem,
+    MatchStatus,
+    PriceClassification,
+    ResearchResult,
+    Verdict,
+    VerificationStatus,
+)
 from app.tools.extract_product import ProductExtractionResult, ProductPageExtraction
 
 FAKE_RUN_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
@@ -60,6 +70,23 @@ def make_completed_run_data(result: ResearchResult) -> dict:
         "checked_at": FAKE_CHECKED_AT.isoformat(),
         "failure_reason": None,
     }
+
+
+def make_comparable_offer(source_url: str, merchant: str, delivered_price: str) -> ComparableOffer:
+    return ComparableOffer(
+        product_name="Test Widget",
+        merchant=merchant,
+        source_url=source_url,
+        current_item_price=delivered_price,
+        shipping_price="0.00",
+        delivered_price=delivered_price,
+        availability=AvailabilityStatus.available,
+        product_match_status=MatchStatus.match,
+        variant_match_status=MatchStatus.match,
+        verification_status=VerificationStatus.verified,
+        source_type="fetched_page",
+        price_classification=PriceClassification.current_unconditional_offer,
+    )
 
 
 FAKE_RUN_DATA_RUNNING = {
@@ -455,7 +482,7 @@ async def test_result_page_displays_product_name(client):
     ("verdict", "expected_label"),
     [
         (Verdict.good_deal, "Buy"),
-        (Verdict.fair, "Wait"),
+        (Verdict.fair, "Fair Price"),
         (Verdict.overpriced, "Don't Buy"),
         (Verdict.insufficient_data, "Not Enough Data"),
     ],
@@ -497,23 +524,14 @@ async def test_result_page_displays_purchase_decision_sections(client):
     assert "Prices and availability change frequently" in response.text
 
 
-async def test_result_page_displays_market_snapshot_from_evidence_prices(client):
+async def test_result_page_displays_market_snapshot_from_validated_offers(client):
     result = FAKE_RESULT.model_copy(
         update={
             "listed_price": "$19.99",
-            "evidence": [
-                EvidenceItem(
-                    text="Amazon lists the same item at $19.99.",
-                    source_url="https://example.com/amazon",
-                ),
-                EvidenceItem(
-                    text="Target lists the same item at $24.99.",
-                    source_url="https://example.com/target",
-                ),
-                EvidenceItem(
-                    text="Brand store lists the same item at $34.99.",
-                    source_url="https://example.com/brand",
-                ),
+            "comparable_offers": [
+                make_comparable_offer("https://example.com/amazon", "Amazon", "19.99"),
+                make_comparable_offer("https://example.com/target", "Target", "24.99"),
+                make_comparable_offer("https://example.com/brand", "Brand store", "34.99"),
             ],
         }
     )
@@ -528,6 +546,34 @@ async def test_result_page_displays_market_snapshot_from_evidence_prices(client)
     assert "$19.99" in response.text
     assert "$24.99" in response.text
     assert "$34.99" in response.text
+    assert "3 validated current listings" in response.text
+
+
+async def test_result_page_ignores_evidence_prices_for_market_snapshot(client):
+    result = FAKE_RESULT.model_copy(
+        update={
+            "listed_price": "$19.99",
+            "evidence": [
+                EvidenceItem(
+                    text="MSRP is $160.00 and a VIP price is $107.88.",
+                    source_url="https://example.com/amazon",
+                ),
+            ],
+            "comparable_offers": [],
+        }
+    )
+    run_data = make_completed_run_data(result)
+
+    with patch(
+        "app.routers.pages.load_research_run", new_callable=AsyncMock, return_value=run_data
+    ):
+        response = await client.get(f"/result/{FAKE_RUN_ID}")
+
+    market_card_html = response.text.split('aria-labelledby="market-heading"', maxsplit=1)[1]
+    market_card_html = market_card_html.split("</aside>", maxsplit=1)[0]
+    assert "$160.00" not in market_card_html
+    assert "$107.88" not in market_card_html
+    assert "Not enough validated current listings" in response.text
 
 
 async def test_result_page_hides_market_modules_for_insufficient_data(client):
