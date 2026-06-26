@@ -3,13 +3,19 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import anthropic
 from pydantic import ValidationError
 
 from app.config import settings
 from app.prompts import SYSTEM_PROMPT, TOOLS, build_initial_prompt
-from app.schemas import ResearchResult
+from app.schemas import ComparableOffer, ResearchResult, Verdict
+from app.services.offer_validation import (
+    alternative_eligible_offers,
+    current_market_offers,
+    validate_offer_candidates,
+)
 from app.tools.extract_product import ProductPageExtraction
 from app.tools.fetch_page import FetchedPage, fetch_page
 from app.tools.normalize_url import fetch_page_cache_key, normalize_url
@@ -18,7 +24,6 @@ from app.tools.offer_candidates import (
     assess_product_identity,
     candidate_from_page,
     candidate_from_search_result,
-    format_offer_table,
     is_accessory_or_partial_listing,
     is_installment_price,
     is_purchasable_offer_candidate,
@@ -209,6 +214,27 @@ def _build_eligible_candidates(
     return eligible
 
 
+def _format_validated_offer_table(offers: list[ComparableOffer]) -> str:
+    if not offers:
+        return ""
+
+    lines = ["Comparable offers found (sorted by delivered price):"]
+    for index, offer in enumerate(offers, 1):
+        comparison_price = offer.delivered_price or offer.current_item_price
+        price_text = f"${comparison_price:.2f}" if comparison_price is not None else "price unknown"
+        shipping_text = "shipping unknown"
+        if offer.shipping_price is not None:
+            shipping_text = f"shipping ${offer.shipping_price:.2f}"
+        lines.append(
+            f"{index}. {offer.merchant} — {price_text} delivered ({shipping_text}) — "
+            f"{offer.product_name} ({offer.source_type})"
+        )
+    lines.append(
+        "If recommending an alternative, use the lowest eligible offer from this list."
+    )
+    return "\n".join(lines)
+
+
 def _find_candidate_by_url(
     url: str, candidates: list[OfferCandidate]
 ) -> OfferCandidate | None:
@@ -220,35 +246,114 @@ def _find_candidate_by_url(
 
 def _validate_alternative_is_lowest(
     alternative: dict | None,
-    eligible_candidates: list[OfferCandidate],
+    eligible_offers: list[ComparableOffer | OfferCandidate],
 ) -> str | None:
     """Return a rejection message if the alternative is not the lowest eligible offer.
 
     Checks both price (within 5% tolerance) and source URL against the lowest
     eligible candidate.
     """
-    if not eligible_candidates or alternative is None:
+    if not eligible_offers or alternative is None:
         return None
-    lowest = eligible_candidates[0]
+    lowest = eligible_offers[0]
     alt_price = parse_price_amount(str(alternative.get("price") or ""))
     if alt_price is None:
         return None
+    lowest_price = _offer_comparison_price(lowest)
+    if lowest_price is None:
+        return None
     # Price check: allow 5% tolerance for display/rounding differences.
-    if alt_price > lowest.price_amount * 1.05:
+    if Decimal(str(alt_price)) > lowest_price * Decimal("1.05"):
         return (
             f"Alternative must use the lowest eligible comparable offer. "
-            f"{lowest.merchant} at ${lowest.price_amount:.2f} is cheaper than "
+            f"{lowest.merchant} at ${lowest_price:.2f} delivered is cheaper than "
             f"the submitted alternative at ${alt_price:.2f}."
         )
     # URL check: the alternative must point to the lowest eligible offer.
     alt_url = str(alternative.get("source_url") or "")
-    if not _urls_are_equivalent(alt_url, lowest.source_url):
+    lowest_url = _offer_source_url(lowest)
+    if not _urls_are_equivalent(alt_url, lowest_url):
         return (
             f"Alternative source URL does not match the lowest eligible offer. "
-            f"Please use {lowest.merchant} at ${lowest.price_amount:.2f} "
-            f"({lowest.source_url}) as the alternative."
+            f"Please use {lowest.merchant} at ${lowest_price:.2f} delivered "
+            f"({lowest_url}) as the alternative."
         )
     return None
+
+
+def _offer_comparison_price(offer: ComparableOffer | OfferCandidate) -> Decimal | None:
+    if isinstance(offer, ComparableOffer):
+        return offer.delivered_price or offer.current_item_price
+    if offer.price_amount is None:
+        return None
+    return Decimal(str(offer.price_amount)).quantize(Decimal("0.01"))
+
+
+def _offer_source_url(offer: ComparableOffer | OfferCandidate) -> str:
+    return str(offer.source_url)
+
+
+def _market_verdict_from_validated_offers(
+    submitted_price: float | None,
+    offers: list[ComparableOffer],
+) -> Verdict | None:
+    if submitted_price is None:
+        return None
+
+    market_offers = current_market_offers(offers)
+    delivered_prices = [
+        offer.delivered_price
+        for offer in market_offers
+        if offer.delivered_price is not None
+    ]
+    if len(delivered_prices) < 2:
+        return None
+
+    ordered_prices = sorted(delivered_prices)
+    midpoint = len(ordered_prices) // 2
+    if len(ordered_prices) % 2 == 1:
+        typical_price = ordered_prices[midpoint]
+    else:
+        typical_price = (ordered_prices[midpoint - 1] + ordered_prices[midpoint]) / Decimal("2")
+
+    submitted = Decimal(str(submitted_price)).quantize(Decimal("0.01"))
+    threshold = Decimal(str(settings.meaningful_savings_threshold))
+    savings = (typical_price - submitted) / typical_price
+    premium = (submitted - typical_price) / typical_price
+
+    if savings >= threshold:
+        return Verdict.good_deal
+    if premium >= threshold:
+        return Verdict.overpriced
+    return Verdict.fair
+
+
+def _summary_with_validated_context(
+    original_summary: str,
+    submitted_price: float | None,
+    offers: list[ComparableOffer],
+    verdict: Verdict,
+) -> str:
+    if verdict != Verdict.fair or submitted_price is None:
+        return original_summary
+
+    has_msrp_context = any(offer.price_classification.value == "msrp" for offer in offers)
+    current_offer_count = len([offer for offer in offers if offer.delivered_price is not None])
+    has_unknown_shipping = any(
+        offer.current_item_price is not None and offer.shipping_price is None
+        for offer in offers
+    )
+
+    if not has_msrp_context:
+        return original_summary
+
+    context = (
+        " This is a fair current-market price and a verified discount from MSRP, "
+        "but the discount is not unique when comparable current offers are similar."
+    )
+    if current_offer_count > 0 and has_unknown_shipping:
+        context += " Some competing shipping costs were not fully verified."
+    return f"{original_summary.rstrip()}{context}"
 
 
 def _format_fetched_page(page) -> str:
@@ -484,6 +589,7 @@ def _build_research_result(
     seen_urls: set[str],
     extraction: ProductPageExtraction,
     identity: ProductIdentity,
+    comparable_offers: list[ComparableOffer] | None = None,
 ) -> ResearchResult:
     try:
         evidence_truncated = verdict_input.get("evidence", [])[:5]
@@ -495,15 +601,28 @@ def _build_research_result(
             "alternative": valid_alternative,
         }
         _validate_verdict_rules(filtered_verdict, seen_urls)
+        submitted_price = parse_price_amount(extraction.listed_price)
+        validated_verdict = _market_verdict_from_validated_offers(
+            submitted_price,
+            comparable_offers or [],
+        )
+        verdict = validated_verdict or filtered_verdict["verdict"]
+        summary = _summary_with_validated_context(
+            filtered_verdict["summary"],
+            submitted_price,
+            comparable_offers or [],
+            verdict,
+        )
         result = ResearchResult(
             product_name=filtered_verdict["product_name"],
             merchant=filtered_verdict["merchant"],
             listed_price=filtered_verdict.get("listed_price"),
-            verdict=filtered_verdict["verdict"],
+            verdict=verdict,
             confidence=filtered_verdict["confidence"],
-            summary=filtered_verdict["summary"],
+            summary=summary,
             evidence=valid_evidence,
             alternative=filtered_verdict.get("alternative"),
+            comparable_offers=comparable_offers or [],
             last_checked=datetime.now(timezone.utc),
         )
         logger.info(
@@ -540,9 +659,15 @@ def _evaluate_verdict_submission(
 
     alternative = verdict_input.get("alternative")
 
+    validated_offers = validate_offer_candidates(candidates, identity_value)
+    validated_alt_offer = None
     if alternative is not None:
         alt_url = str(alternative.get("source_url") or "")
         alt_candidate = _find_candidate_by_url(alt_url, candidates)
+        for offer in validated_offers:
+            if _urls_are_equivalent(alt_url, str(offer.source_url)):
+                validated_alt_offer = offer
+                break
         if alt_candidate is not None and is_unavailable(alt_candidate):
             unavailable_rejection = (
                 "The submitted alternative is sold out or unavailable. "
@@ -590,23 +715,45 @@ def _evaluate_verdict_submission(
                     f"{settings.meaningful_savings_threshold:.0%} threshold). "
                     "Please omit the alternative or find a substantially cheaper offer."
                 )
+            alternative_survives_shipping_uncertainty = (
+                alternative_eligible_offers(
+                    [validated_alt_offer],
+                    Decimal(str(submitted_price)).quantize(Decimal("0.01")),
+                    settings.meaningful_savings_threshold,
+                )
+                if validated_alt_offer is not None
+                else []
+            )
+            if (
+                validated_alt_offer is not None
+                and validated_alt_offer.shipping_price is None
+                and not alternative_survives_shipping_uncertainty
+            ):
+                return reject(
+                    "The submitted alternative has unknown shipping, so the claimed savings "
+                    "could disappear at checkout. Please omit it or verify delivered cost."
+                )
 
     if submitted_price is None:
         return "Verdict received."
 
-    eligible = _build_eligible_candidates(
-        candidates, submitted_price, identity_value, seen_urls
+    eligible = alternative_eligible_offers(
+        validated_offers,
+        Decimal(str(submitted_price)).quantize(Decimal("0.01")),
+        settings.meaningful_savings_threshold,
     )
     if not eligible:
         return "Verdict received."
 
-    table_text = format_offer_table(eligible)
+    table_text = _format_validated_offer_table(eligible)
 
     if alternative is None:
         lowest = eligible[0]
+        lowest_price = lowest.delivered_price or lowest.current_item_price
         missing_alternative_message = (
             f"Eligible cheaper alternatives were found. Please include the lowest eligible "
-            f"comparable offer as the alternative: {lowest.merchant} at ${lowest.price_amount:.2f}."
+            f"comparable offer as the alternative: {lowest.merchant} at "
+            f"${lowest_price:.2f} delivered."
         )
         return reject(missing_alternative_message, table_text)
 
@@ -705,7 +852,21 @@ async def _run_agent_loop(
                 })
 
         if verdict_input is not None:
-            return _build_research_result(verdict_input, seen_urls, extraction, identity)
+            comparable_candidates = [
+                candidate for candidate in candidates
+                if not _urls_are_equivalent(candidate.source_url, normalized_url)
+            ]
+            comparable_offers = validate_offer_candidates(
+                comparable_candidates,
+                identity.value,
+            )
+            return _build_research_result(
+                verdict_input,
+                seen_urls,
+                extraction,
+                identity,
+                comparable_offers,
+            )
 
         messages.append({"role": "user", "content": tool_results})
 

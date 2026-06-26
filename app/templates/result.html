@@ -429,11 +429,11 @@
                     </div>
                     {% if result_view.market_snapshot.has_comparable_prices %}
                     <p class="market-note">
-                        Based on {{ result_view.market_snapshot.comparable_price_count }} price reference{% if result_view.market_snapshot.comparable_price_count != 1 %}s{% endif %} in cited research.
+                        Based on {{ result_view.market_snapshot.comparable_price_count }} validated current listing{% if result_view.market_snapshot.comparable_price_count != 1 %}s{% endif %}.
                     </p>
                     {% else %}
                     <p class="market-note">
-                        No clean dollar amounts were extractable from the cited evidence.
+                        Not enough validated current listings to present a market range.
                     </p>
                     {% endif %}
                 </aside>

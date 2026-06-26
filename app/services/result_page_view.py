@@ -1,10 +1,8 @@
-import re
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from app.schemas import ResearchResult, Verdict
-
-_PRICE_PATTERN = re.compile(r"\$\s?([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)")
+from app.services.offer_validation import current_market_offers
 
 
 @dataclass(frozen=True)
@@ -17,7 +15,7 @@ class MarketPriceSnapshot:
 
     @property
     def has_comparable_prices(self) -> bool:
-        return self.comparable_price_count > 0
+        return self.comparable_price_count >= 2
 
 
 @dataclass(frozen=True)
@@ -41,33 +39,30 @@ def build_result_page_view(result: ResearchResult) -> ResultPageView:
 
 
 def _build_market_snapshot(result: ResearchResult) -> MarketPriceSnapshot:
-    comparable_prices: list[Decimal] = []
-    for item in result.evidence:
-        comparable_prices.extend(_extract_prices_from_text(item.text))
-
-    comparable_prices = sorted(comparable_prices)
+    comparable_prices = sorted(_current_delivered_prices(result))
+    has_sufficient_sample = len(comparable_prices) >= 2
 
     return MarketPriceSnapshot(
         listed_price=result.listed_price,
-        lowest_comparable_price=_format_price(comparable_prices[0]) if comparable_prices else None,
+        lowest_comparable_price=_format_price(comparable_prices[0])
+        if has_sufficient_sample
+        else None,
         typical_comparable_price=_format_price(_median_price(comparable_prices))
-        if comparable_prices
+        if has_sufficient_sample
         else None,
         highest_comparable_price=_format_price(comparable_prices[-1])
-        if comparable_prices
+        if has_sufficient_sample
         else None,
         comparable_price_count=len(comparable_prices),
     )
 
 
-def _extract_prices_from_text(text: str) -> list[Decimal]:
-    prices: list[Decimal] = []
-    for match in _PRICE_PATTERN.finditer(text):
-        normalized_price = match.group(1).replace(",", "")
-        try:
-            prices.append(Decimal(normalized_price))
-        except InvalidOperation:
+def _current_delivered_prices(result: ResearchResult) -> list[Decimal]:
+    prices = []
+    for offer in current_market_offers(result.comparable_offers):
+        if offer.delivered_price is None:
             continue
+        prices.append(offer.delivered_price)
     return prices
 
 

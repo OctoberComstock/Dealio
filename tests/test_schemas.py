@@ -45,7 +45,7 @@ def test_all_verdict_values_are_accepted():
 def test_verdict_display_labels_are_decision_oriented():
     expected_labels = {
         Verdict.good_deal: "Buy",
-        Verdict.fair: "Wait",
+        Verdict.fair: "Fair Price",
         Verdict.overpriced: "Don't Buy",
         Verdict.insufficient_data: "Not Enough Data",
         Verdict.failed: "Failed",

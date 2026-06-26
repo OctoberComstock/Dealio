@@ -6,9 +6,23 @@ import anthropic
 import httpx
 import pytest
 
-from app.agent import _build_eligible_candidates, run_research_agent
+from app.agent import (
+    _build_eligible_candidates,
+    _build_research_result,
+    _evaluate_verdict_submission,
+    _market_verdict_from_validated_offers,
+    run_research_agent,
+)
 from app.prompts import SYSTEM_PROMPT
-from app.schemas import ResearchResult
+from app.schemas import (
+    AvailabilityStatus,
+    ComparableOffer,
+    MatchStatus,
+    PriceClassification,
+    ResearchResult,
+    Verdict,
+    VerificationStatus,
+)
 from app.tools.extract_product import ProductPageExtraction
 from app.tools.fetch_page import FetchedPage
 from app.tools.offer_candidates import OfferCandidate
@@ -29,6 +43,23 @@ def make_response(*blocks):
     response = MagicMock()
     response.content = list(blocks)
     return response
+
+
+def make_validated_offer(source_url: str, delivered_price: str) -> ComparableOffer:
+    return ComparableOffer(
+        product_name="Great Widget",
+        merchant="example.com",
+        source_url=source_url,
+        current_item_price=delivered_price,
+        shipping_price="0.00",
+        delivered_price=delivered_price,
+        availability=AvailabilityStatus.available,
+        product_match_status=MatchStatus.match,
+        variant_match_status=MatchStatus.match,
+        verification_status=VerificationStatus.verified,
+        source_type="fetched_page",
+        price_classification=PriceClassification.current_unconditional_offer,
+    )
 
 def tool_result_contents(mock_create: AsyncMock) -> list[str]:
     contents: list[str] = []
@@ -99,6 +130,76 @@ def mock_create():
 
 
 # --- Agent behavior tests ---
+
+
+def test_market_verdict_uses_validated_delivered_prices_for_good_deal():
+    offers = [
+        make_validated_offer("https://example.com/one", "139.95"),
+        make_validated_offer("https://example.com/two", "149.95"),
+        make_validated_offer("https://example.com/three", "159.95"),
+    ]
+
+    verdict = _market_verdict_from_validated_offers(119.95, offers)
+
+    assert verdict == Verdict.good_deal
+
+
+def test_research_result_fair_summary_acknowledges_msrp_discount(extraction, identity):
+    current_offer = make_validated_offer("https://example.com/current", "119.95")
+    msrp_offer = make_validated_offer("https://example.com/msrp", "160.00").model_copy(
+        update={"price_classification": PriceClassification.msrp}
+    )
+    verdict_input = {
+        **VALID_VERDICT,
+        "listed_price": "$119.95",
+        "verdict": "good_deal",
+        "summary": "Several retailers list this item near the submitted price.",
+    }
+    extraction.listed_price = "$119.95"
+
+    result = _build_research_result(
+        verdict_input,
+        {"https://example.com/product"},
+        extraction,
+        identity,
+        [current_offer, make_validated_offer("https://example.com/two", "119.95"), msrp_offer],
+    )
+
+    assert result.verdict == Verdict.fair
+    assert "verified discount from MSRP" in result.summary
+
+
+def test_alternative_with_unknown_shipping_is_rejected():
+    candidate = OfferCandidate(
+        merchant="example.com",
+        source_url="https://example.com/alt",
+        product_name="Great Widget",
+        price_text="$25.50",
+        price_amount=25.50,
+        match_text="Great Widget. In stock. Add to cart.",
+        verification_status="verified",
+    )
+    verdict_input = {
+        **VALID_VERDICT,
+        "alternative": {
+            "product_name": "Great Widget",
+            "price": "$25.50",
+            "reason": "Lower item price.",
+            "source_url": "https://example.com/alt",
+            "is_cheaper": True,
+            "is_better_reviewed": False,
+        },
+    }
+
+    response = _evaluate_verdict_submission(
+        verdict_input,
+        [candidate],
+        29.99,
+        "Great Widget",
+        {"https://example.com/alt"},
+    )
+
+    assert "unknown shipping" in response
 
 
 async def test_agent_sends_initial_product_context(mock_create, extraction, identity):
